@@ -70,6 +70,7 @@ from collections.abc import Awaitable
 from datetime import timedelta
 from pathlib import Path
 from typing import AsyncIterator, Callable, final
+from urllib.parse import quote
 
 import aiofiles
 import aiofiles.os as aios
@@ -208,7 +209,7 @@ class ModelStoreClient:
         url = _make_store_url(
             self._store_host,
             self._store_port,
-            f"/models/{model_id}/files",
+            f"/models/{quote(model_id, safe='')}/files",
         )
         try:
             async with (
@@ -346,7 +347,7 @@ class ModelStoreClient:
         url = _make_store_url(
             self._store_host,
             self._store_port,
-            f"/models/{model_id}/files",
+            f"/models/{quote(model_id, safe='')}/files",
         )
         async with (
             create_http_session(timeout_profile="short") as session,
@@ -404,7 +405,7 @@ class ModelStoreClient:
         url = _make_store_url(
             self._store_host,
             self._store_port,
-            f"/models/{model_id}/{file_path}",
+            f"/models/{quote(model_id, safe='')}/{file_path}",
         )
         timeout = aiohttp.ClientTimeout(
             total=3600,

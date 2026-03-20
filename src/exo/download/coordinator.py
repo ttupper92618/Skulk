@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import anyio
 from anyio import current_time
@@ -231,8 +232,30 @@ class DownloadCoordinator:
 
         async def download_wrapper(cancel_scope: anyio.CancelScope) -> None:
             try:
+                path: Path | None = None
                 with cancel_scope:
-                    await self.shard_downloader.ensure_shard(shard)
+                    path = await self.shard_downloader.ensure_shard(shard)
+                if path is not None:
+                    # Correct the model_directory in case the downloader staged to a
+                    # non-default location (e.g. the model store staging path rather
+                    # than the standard EXO_MODELS_DIR).  The progress callback fired
+                    # inside ensure_shard() always uses _model_dir(), so we override it
+                    # here with the actual returned path.
+                    actual_dir = str(path)
+                    if actual_dir != self._model_dir(model_id):
+                        existing = self.download_status.get(model_id)
+                        if isinstance(existing, DownloadCompleted):
+                            corrected = DownloadCompleted(
+                                shard_metadata=existing.shard_metadata,
+                                node_id=existing.node_id,
+                                total=existing.total,
+                                read_only=existing.read_only,
+                                model_directory=actual_dir,
+                            )
+                            self.download_status[model_id] = corrected
+                            await self.event_sender.send(
+                                NodeDownloadProgress(download_progress=corrected)
+                            )
             except Exception as e:
                 logger.error(f"Download failed for {model_id}: {e}")
                 failed = DownloadFailed(

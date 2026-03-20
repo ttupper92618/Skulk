@@ -144,8 +144,16 @@ class ModelStoreConfig(FrozenModel):
             if the config file is present — useful for temporarily reverting
             to standard HF downloads without removing the file.
         store_host: Hostname or node_id of the node that hosts the model
-            store.  Must match ``socket.gethostname()`` or the libp2p peer
-            ID of the designated store node.
+            store.  Used only for identity resolution (determining whether
+            this node is the store host).  Must match
+            ``socket.gethostname()`` or the libp2p peer ID of the
+            designated store node.
+        store_http_host: Hostname or IP address used by worker nodes to
+            reach the store host over HTTP.  Defaults to ``store_host``
+            when ``None``.  Set this when ``store_host`` is a libp2p peer
+            ID (which is not a valid DNS name) so that workers can still
+            resolve the HTTP address (e.g. ``mac-studio-1`` or
+            ``192.168.1.10``).
         store_port: HTTP port for ``ModelStoreServer`` on the store host.
             Must be reachable from all worker nodes.
         store_path: Absolute path to the model store root on the store host.
@@ -161,6 +169,7 @@ class ModelStoreConfig(FrozenModel):
 
     enabled: bool = True
     store_host: str
+    store_http_host: str | None = None
     store_port: int = 58080
     store_path: str
     download: DownloadStoreConfig = DownloadStoreConfig()

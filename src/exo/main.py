@@ -84,10 +84,12 @@ class Node:
             local_hostname = socket.gethostname()
             is_store_host = ms.store_host in (str(node_id), local_hostname)
 
-            # Store host gets a local path so the client uses shutil instead of HTTP
+            # Store host gets a local path so the client uses shutil instead of HTTP.
+            # Use store_http_host (when set) as the HTTP hostname so that a PeerId
+            # in store_host does not get used as a DNS name by worker nodes.
             local_store_path: Path | None = Path(ms.store_path) if is_store_host else None
             store_client = ModelStoreClient(
-                store_host=ms.store_host,
+                store_host=ms.store_http_host or ms.store_host,
                 store_port=ms.store_port,
                 local_store_path=local_store_path,
             )
