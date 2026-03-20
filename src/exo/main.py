@@ -3,7 +3,9 @@ import multiprocessing as mp
 import os
 import resource
 import signal
+import socket
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Self
 
 import anyio
@@ -21,6 +23,10 @@ from exo.shared.constants import EXO_LOG
 from exo.shared.election import Election, ElectionResult
 from exo.shared.logging import logger_cleanup, logger_setup
 from exo.shared.types.common import NodeId, SessionId
+from exo.store.config import FoxClusterConfig, load_fox_config, resolve_node_staging
+from exo.store.fox_model_store import FoxModelStore
+from exo.store.fox_store_client import FoxShardDownloader, FoxStoreClient
+from exo.store.fox_store_server import FoxStoreServer
 from exo.utils.channels import Receiver, channel
 from exo.utils.pydantic_ext import CamelCaseModel
 from exo.utils.task_group import TaskGroup
@@ -40,6 +46,9 @@ class Node:
 
     node_id: NodeId
     offline: bool
+    fox_config: FoxClusterConfig | None
+    store_client: FoxStoreClient | None
+    store_server: FoxStoreServer | None
     _tg: TaskGroup = field(init=False, default_factory=TaskGroup)
 
     @classmethod
@@ -63,11 +72,49 @@ class Node:
 
         logger.info(f"Starting node {node_id}")
 
+        # Load foxcluster.yaml (returns None if absent — zero-config compat)
+        fox_config = load_fox_config(Path("foxcluster.yaml"))
+        store_client: FoxStoreClient | None = None
+        store_server: FoxStoreServer | None = None
+
+        if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled:
+            ms = fox_config.model_store
+            local_hostname = socket.gethostname()
+            is_store_host = ms.store_host in (str(node_id), local_hostname)
+
+            local_store_path: Path | None = Path(ms.store_path) if is_store_host else None
+            store_client = FoxStoreClient(
+                store_host=ms.store_host,
+                store_port=ms.store_port,
+                local_store_path=local_store_path,
+            )
+
+            if is_store_host:
+                fox_store = FoxModelStore(Path(ms.store_path))
+                store_server = FoxStoreServer(fox_store, port=ms.store_port)
+                logger.info(
+                    f"This node is the FoxStore host — store at {ms.store_path}, "
+                    f"server on port {ms.store_port}"
+                )
+
         # Create DownloadCoordinator (unless --no-downloads)
         if not args.no_downloads:
+            base_downloader = exo_shard_downloader(offline=args.offline)
+            if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled and store_client is not None:
+                ms = fox_config.model_store
+                staging_cfg = resolve_node_staging(ms, str(node_id))
+                shard_downloader = FoxShardDownloader(
+                    inner=base_downloader,
+                    store_client=store_client,
+                    staging_config=staging_cfg,
+                    allow_hf_fallback=ms.download.allow_hf_fallback,
+                )
+            else:
+                shard_downloader = base_downloader
+
             download_coordinator = DownloadCoordinator(
                 node_id,
-                exo_shard_downloader(offline=args.offline),
+                shard_downloader,
                 event_sender=event_router.sender(),
                 download_command_receiver=router.receiver(topics.DOWNLOAD_COMMANDS),
                 offline=args.offline,
@@ -88,12 +135,21 @@ class Node:
             api = None
 
         if not args.no_worker:
+            worker_store_client: FoxStoreClient | None = store_client
+            if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled:
+                worker_staging_cfg = resolve_node_staging(
+                    fox_config.model_store, str(node_id)
+                )
+            else:
+                worker_staging_cfg = None
             worker = Worker(
                 node_id,
                 event_receiver=event_router.receiver(),
                 event_sender=event_router.sender(),
                 command_sender=router.sender(topics.COMMANDS),
                 download_command_sender=router.sender(topics.DOWNLOAD_COMMANDS),
+                store_client=worker_store_client,
+                staging_config=worker_staging_cfg,
             )
         else:
             worker = None
@@ -134,6 +190,9 @@ class Node:
             api,
             node_id,
             args.offline,
+            fox_config,
+            store_client,
+            store_server,
         )
 
     async def run(self):
@@ -143,6 +202,8 @@ class Node:
             tg.start_soon(self.router.run)
             tg.start_soon(self.event_router.run)
             tg.start_soon(self.election.run)
+            if self.store_server:
+                tg.start_soon(self.store_server.start)
             if self.download_coordinator:
                 tg.start_soon(self.download_coordinator.run)
             if self.worker:
@@ -225,9 +286,21 @@ class Node:
                 if result.is_new_master:
                     if self.download_coordinator:
                         self.download_coordinator.shutdown()
+                        base_dl = exo_shard_downloader(offline=self.offline)
+                        ms = self.fox_config.model_store if self.fox_config is not None else None
+                        if ms is not None and ms.enabled and self.store_client is not None:
+                            elect_staging = resolve_node_staging(ms, str(self.node_id))
+                            elect_downloader = FoxShardDownloader(
+                                inner=base_dl,
+                                store_client=self.store_client,
+                                staging_config=elect_staging,
+                                allow_hf_fallback=ms.download.allow_hf_fallback,
+                            )
+                        else:
+                            elect_downloader = base_dl
                         self.download_coordinator = DownloadCoordinator(
                             self.node_id,
-                            exo_shard_downloader(offline=self.offline),
+                            elect_downloader,
                             event_sender=self.event_router.sender(),
                             download_command_receiver=self.router.receiver(
                                 topics.DOWNLOAD_COMMANDS
@@ -237,6 +310,12 @@ class Node:
                         self._tg.start_soon(self.download_coordinator.run)
                     if self.worker:
                         self.worker.shutdown()
+                        ms2 = self.fox_config.model_store if self.fox_config is not None else None
+                        elect_staging2 = (
+                            resolve_node_staging(ms2, str(self.node_id))
+                            if ms2 is not None and ms2.enabled
+                            else None
+                        )
                         # TODO: add profiling etc to resource monitor
                         self.worker = Worker(
                             self.node_id,
@@ -246,6 +325,8 @@ class Node:
                             download_command_sender=self.router.sender(
                                 topics.DOWNLOAD_COMMANDS
                             ),
+                            store_client=self.store_client,
+                            staging_config=elect_staging2,
                         )
                         self._tg.start_soon(self.worker.run)
                     if self.api:

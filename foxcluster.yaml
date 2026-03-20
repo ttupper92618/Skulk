@@ -1,0 +1,43 @@
+# foxcluster.yaml
+# Place alongside the exo project root.
+# If this file is absent, foxcluster behaves identically to upstream EXO.
+
+model_store:
+  enabled: true
+
+  # The node that hosts the store. Must match a node_id or hostname.
+  store_host: kite1
+
+  # HTTP port for FoxStoreServer (runs on store_host only).
+  store_port: 58080
+
+  # Absolute path to the model store on the store_host node.
+  store_path: /Volumes/FoxStore/models
+
+  download:
+    # If true, HuggingFace is used as fallback when model not in store.
+    allow_hf_fallback: true
+
+  staging:
+    # Stage shard files to node-local cache before MLX load.
+    enabled: true
+
+    # Local staging directory (~ expanded per node).
+    node_cache_path: ~/.foxcluster/stage
+
+    # Delete staged files when instance is deactivated.
+    cleanup_on_deactivate: true
+
+  # Per-node overrides (matched by hostname or node_id).
+  node_overrides:
+    kite1:
+      staging:
+        # Store host loads directly — no network hop needed.
+        # Point at the store path itself so MLX loads from there.
+        node_cache_path: /Volumes/FoxStore/models
+        cleanup_on_deactivate: false
+    kite3:
+      staging:
+        # kite3 has a fast external SSD.
+        node_cache_path: /Volumes/FastSSD/foxstage
+        cleanup_on_deactivate: true
