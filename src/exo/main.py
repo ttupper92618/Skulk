@@ -23,10 +23,10 @@ from exo.shared.constants import EXO_LOG
 from exo.shared.election import Election, ElectionResult
 from exo.shared.logging import logger_cleanup, logger_setup
 from exo.shared.types.common import NodeId, SessionId
-from exo.store.config import FoxClusterConfig, load_fox_config, resolve_node_staging
-from exo.store.fox_model_store import FoxModelStore
-from exo.store.fox_store_client import FoxShardDownloader, FoxStoreClient
-from exo.store.fox_store_server import FoxStoreServer
+from exo.store.config import ExoConfig, load_exo_config, resolve_node_staging
+from exo.store.model_store import ModelStore
+from exo.store.model_store_client import ModelStoreClient, ModelStoreDownloader
+from exo.store.model_store_server import ModelStoreServer
 from exo.utils.channels import Receiver, channel
 from exo.utils.pydantic_ext import CamelCaseModel
 from exo.utils.task_group import TaskGroup
@@ -46,9 +46,9 @@ class Node:
 
     node_id: NodeId
     offline: bool
-    fox_config: FoxClusterConfig | None
-    store_client: FoxStoreClient | None
-    store_server: FoxStoreServer | None
+    exo_config: ExoConfig | None
+    store_client: ModelStoreClient | None
+    store_server: ModelStoreServer | None
     _tg: TaskGroup = field(init=False, default_factory=TaskGroup)
 
     @classmethod
@@ -72,38 +72,41 @@ class Node:
 
         logger.info(f"Starting node {node_id}")
 
-        # Load foxcluster.yaml (returns None if absent — zero-config compat)
-        fox_config = load_fox_config(Path("foxcluster.yaml"))
-        store_client: FoxStoreClient | None = None
-        store_server: FoxStoreServer | None = None
+        # Load exo.yaml (returns None if absent — zero-config compatibility:
+        # when exo.yaml is missing, all store references stay None and exo
+        # behaves identically to the upstream default).
+        exo_config = load_exo_config(Path("exo.yaml"))
+        store_client: ModelStoreClient | None = None
+        store_server: ModelStoreServer | None = None
 
-        if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled:
-            ms = fox_config.model_store
+        if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled:
+            ms = exo_config.model_store
             local_hostname = socket.gethostname()
             is_store_host = ms.store_host in (str(node_id), local_hostname)
 
+            # Store host gets a local path so the client uses shutil instead of HTTP
             local_store_path: Path | None = Path(ms.store_path) if is_store_host else None
-            store_client = FoxStoreClient(
+            store_client = ModelStoreClient(
                 store_host=ms.store_host,
                 store_port=ms.store_port,
                 local_store_path=local_store_path,
             )
 
             if is_store_host:
-                fox_store = FoxModelStore(Path(ms.store_path))
-                store_server = FoxStoreServer(fox_store, port=ms.store_port)
+                model_store = ModelStore(Path(ms.store_path))
+                store_server = ModelStoreServer(model_store, port=ms.store_port)
                 logger.info(
-                    f"This node is the FoxStore host — store at {ms.store_path}, "
-                    f"server on port {ms.store_port}"
+                    f"ModelStore: this node is the store host — "
+                    f"store at {ms.store_path}, server on port {ms.store_port}"
                 )
 
         # Create DownloadCoordinator (unless --no-downloads)
         if not args.no_downloads:
             base_downloader = exo_shard_downloader(offline=args.offline)
-            if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled and store_client is not None:
-                ms = fox_config.model_store
+            if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled and store_client is not None:
+                ms = exo_config.model_store
                 staging_cfg = resolve_node_staging(ms, str(node_id))
-                shard_downloader = FoxShardDownloader(
+                shard_downloader = ModelStoreDownloader(
                     inner=base_downloader,
                     store_client=store_client,
                     staging_config=staging_cfg,
@@ -135,10 +138,10 @@ class Node:
             api = None
 
         if not args.no_worker:
-            worker_store_client: FoxStoreClient | None = store_client
-            if fox_config is not None and fox_config.model_store is not None and fox_config.model_store.enabled:
+            worker_store_client: ModelStoreClient | None = store_client
+            if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled:
                 worker_staging_cfg = resolve_node_staging(
-                    fox_config.model_store, str(node_id)
+                    exo_config.model_store, str(node_id)
                 )
             else:
                 worker_staging_cfg = None
@@ -190,7 +193,7 @@ class Node:
             api,
             node_id,
             args.offline,
-            fox_config,
+            exo_config,
             store_client,
             store_server,
         )
@@ -287,10 +290,10 @@ class Node:
                     if self.download_coordinator:
                         self.download_coordinator.shutdown()
                         base_dl = exo_shard_downloader(offline=self.offline)
-                        ms = self.fox_config.model_store if self.fox_config is not None else None
+                        ms = self.exo_config.model_store if self.exo_config is not None else None
                         if ms is not None and ms.enabled and self.store_client is not None:
                             elect_staging = resolve_node_staging(ms, str(self.node_id))
-                            elect_downloader = FoxShardDownloader(
+                            elect_downloader = ModelStoreDownloader(
                                 inner=base_dl,
                                 store_client=self.store_client,
                                 staging_config=elect_staging,
@@ -310,7 +313,7 @@ class Node:
                         self._tg.start_soon(self.download_coordinator.run)
                     if self.worker:
                         self.worker.shutdown()
-                        ms2 = self.fox_config.model_store if self.fox_config is not None else None
+                        ms2 = self.exo_config.model_store if self.exo_config is not None else None
                         elect_staging2 = (
                             resolve_node_staging(ms2, str(self.node_id))
                             if ms2 is not None and ms2.enabled

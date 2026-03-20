@@ -1,12 +1,72 @@
 # pyright: reportAny=false
 """
-Configuration schema for foxcluster.yaml.
+exo cluster configuration schema — ``exo.yaml``.
 
-Place foxcluster.yaml alongside the project root. If absent, foxcluster
-behaves identically to upstream EXO (zero-config compatibility).
+Overview
+--------
+This module defines the Pydantic models for ``exo.yaml``, the optional
+cluster-level configuration file for exo.  The file is placed alongside
+the project root on **every node** in the cluster.  If the file is absent,
+exo behaves identically to the upstream default (zero-config compatibility).
+
+The ``model_store`` section is the first feature gated by this config.  The
+design deliberately leaves room for future sections (e.g. networking tuning,
+custom inference backends, cluster-level resource policies) without breaking
+existing deployments.
+
+Model store design summary
+--------------------------
+In a standard exo cluster every node independently downloads its assigned
+model shard from HuggingFace at inference time.  For a small home cluster
+this means:
+
+* Redundant external bandwidth — every node pulls the same files.
+* Slow cold starts on large models (30B+).
+* Version drift between nodes.
+* No offline capability after the first run.
+
+The model store solves this by designating one node as the **store host**.
+The store host serves model files to all other nodes over HTTP on the local
+network (typically Thunderbolt or 10 GbE).  Worker nodes stage their
+assigned shard to node-local storage before MLX loads it.  MLX always
+receives a **local filesystem path** — the inference stack is completely
+unaware the store exists.
+
+HuggingFace is used as a fallback when a model is not yet in the store (if
+``download.allow_hf_fallback`` is ``true``).  For air-gapped deployments set
+it to ``false`` to ensure all models come from the store.
+
+Configuration file location
+---------------------------
+``exo.yaml`` must be placed at the **same relative path on every node** (i.e.
+alongside the ``exo`` project root).  Node-specific behaviour is handled via
+``node_overrides`` keyed by hostname or node_id rather than per-node files.
+
+Example ``exo.yaml``::
+
+    model_store:
+      enabled: true
+      store_host: mac-studio-1    # hostname of the node with attached storage
+      store_port: 58080
+      store_path: /Volumes/ModelStore/models
+
+      download:
+        allow_hf_fallback: true
+
+      staging:
+        enabled: true
+        node_cache_path: ~/.exo/staging
+        cleanup_on_deactivate: true
+
+      node_overrides:
+        mac-studio-1:
+          staging:
+            node_cache_path: /Volumes/ModelStore/models  # load directly from store
+            cleanup_on_deactivate: false
 """
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 from typing import final
 
@@ -17,30 +77,87 @@ from exo.utils.pydantic_ext import FrozenModel
 
 @final
 class StagingNodeConfig(FrozenModel):
-    """Per-node staging configuration."""
+    """Per-node staging configuration.
+
+    Controls where model files are staged on the node-local filesystem
+    before MLX loads them, and whether those files are cleaned up when
+    the model instance is deactivated.
+
+    Attributes:
+        enabled: When ``False`` staging is skipped entirely and MLX loads
+            directly from the store path (only useful on the store host when
+            ``node_cache_path == store_path``).
+        node_cache_path: Absolute or ``~``-prefixed path to the directory
+            where staged model files are written.  Each model occupies a
+            subdirectory named ``<org>--<model>`` (e.g.
+            ``mlx-community--Qwen3-30B-A3B-4bit``).
+        cleanup_on_deactivate: When ``True``, staged files are deleted when
+            the model instance is shut down, freeing local disk space.
+            Set to ``False`` on the store host so the canonical copy is
+            never removed.
+    """
 
     enabled: bool = True
-    node_cache_path: str = "~/.foxcluster/stage"
+    node_cache_path: str = "~/.exo/staging"
     cleanup_on_deactivate: bool = True
 
 
 @final
 class DownloadStoreConfig(FrozenModel):
-    """Download policy configuration."""
+    """Download policy for the model store.
+
+    Attributes:
+        allow_hf_fallback: When ``True`` (the default), nodes fall back to
+            downloading from HuggingFace if a requested model is not present
+            in the store.  Set to ``False`` for air-gapped clusters where all
+            models must be pre-staged in the store.
+    """
 
     allow_hf_fallback: bool = True
 
 
 @final
 class NodeOverrideConfig(FrozenModel):
-    """Per-node config overrides (matched by hostname or node_id)."""
+    """Per-node configuration overrides.
+
+    Overrides are matched by **hostname** (``socket.gethostname()``) or by
+    libp2p **node_id**.  The first match wins.  Unspecified fields fall back
+    to the base configuration.
+
+    Attributes:
+        staging: Node-specific staging settings.  ``None`` means "use the
+            base staging config unchanged".
+    """
 
     staging: StagingNodeConfig | None = None
 
 
 @final
 class ModelStoreConfig(FrozenModel):
-    """Top-level model store configuration block."""
+    """Configuration for the cluster-wide model store feature.
+
+    All fields except ``store_host`` and ``store_path`` have sensible
+    defaults so most clusters only need to set those two values.
+
+    Attributes:
+        enabled: Master switch.  ``False`` disables the store entirely even
+            if the config file is present — useful for temporarily reverting
+            to standard HF downloads without removing the file.
+        store_host: Hostname or node_id of the node that hosts the model
+            store.  Must match ``socket.gethostname()`` or the libp2p peer
+            ID of the designated store node.
+        store_port: HTTP port for ``ModelStoreServer`` on the store host.
+            Must be reachable from all worker nodes.
+        store_path: Absolute path to the model store root on the store host.
+            All model directories live here as
+            ``<store_path>/<org>--<model>/``.
+        download: Download fallback policy.
+        staging: Default staging config applied to all nodes that do not have
+            a matching entry in ``node_overrides``.
+        node_overrides: Per-node config overrides keyed by hostname or
+            node_id.  Typically used to configure the store host to load
+            directly from ``store_path`` instead of making a local copy.
+    """
 
     enabled: bool = True
     store_host: str
@@ -52,36 +169,72 @@ class ModelStoreConfig(FrozenModel):
 
 
 @final
-class FoxClusterConfig(FrozenModel):
-    """Root configuration model for foxcluster.yaml."""
+class ExoConfig(FrozenModel):
+    """Root configuration model for ``exo.yaml``.
+
+    This is the top-level object parsed from the config file.  The design
+    leaves room for future top-level sections (networking, inference, etc.)
+    without breaking existing deployments.
+
+    Attributes:
+        model_store: Model store configuration.  ``None`` when the section is
+            absent, which means the model store feature is disabled.
+    """
 
     model_store: ModelStoreConfig | None = None
 
 
-def load_fox_config(
-    path: Path = Path("foxcluster.yaml"),
-) -> FoxClusterConfig | None:
-    """Load foxcluster.yaml. Returns None if the file is absent.
+def load_exo_config(
+    path: Path = Path("exo.yaml"),
+) -> ExoConfig | None:
+    """Load ``exo.yaml`` from *path*.
 
-    Zero-config compatibility: all downstream code must check for None
-    before using the returned config.
+    Returns ``None`` if the file does not exist, preserving zero-config
+    compatibility: all downstream code must check for ``None`` before using
+    the returned config and fall back to standard EXO behaviour.
+
+    Args:
+        path: Path to the config file.  Defaults to ``exo.yaml`` in the
+              current working directory (the project root).
+
+    Returns:
+        Parsed :class:`ExoConfig` instance, or ``None`` if the file is absent.
+
+    Raises:
+        :class:`pydantic.ValidationError`: If the file exists but contains
+            invalid configuration.
+        :class:`yaml.YAMLError`: If the file exists but is not valid YAML.
     """
     if not path.exists():
         return None
     with path.open() as f:
         raw = yaml.safe_load(f)
-    return FoxClusterConfig.model_validate(raw)
+    return ExoConfig.model_validate(raw)
 
 
 def resolve_node_staging(
-    config: ModelStoreConfig, node_id: str
+    config: ModelStoreConfig,
+    node_id: str,
 ) -> StagingNodeConfig:
-    """Return the effective staging config for a node.
+    """Return the effective :class:`StagingNodeConfig` for a node.
 
-    Per-node overrides (matched by node_id or hostname) take priority
-    over the base staging config.
+    Resolution order (first match wins):
+
+    1. ``node_overrides[<node_id>].staging`` — matched by libp2p peer ID.
+    2. ``node_overrides[<hostname>].staging`` — matched by
+       ``socket.gethostname()``.
+    3. ``config.staging`` — the base (default) staging config.
+
+    Args:
+        config: The parsed ``model_store`` config section.
+        node_id: The libp2p peer ID of this node (as a string).
+
+    Returns:
+        The :class:`StagingNodeConfig` that should be used on this node.
     """
-    override = config.node_overrides.get(node_id)
-    if override is not None and override.staging is not None:
-        return override.staging
+    hostname = socket.gethostname()
+    for key in (node_id, hostname):
+        override = config.node_overrides.get(key)
+        if override is not None and override.staging is not None:
+            return override.staging
     return config.staging

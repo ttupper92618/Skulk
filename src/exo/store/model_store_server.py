@@ -1,15 +1,64 @@
 """
-FoxStoreServer — lightweight aiohttp HTTP server for the store host node.
+ModelStoreServer — lightweight aiohttp HTTP file server for the store host.
 
-Serves model files to worker nodes with range request support for
-resumable transfers. Runs only on the designated store host.
+Role in the system
+------------------
+``ModelStoreServer`` runs only on the **store host** node.  It exposes the
+contents of the :class:`~exo.store.model_store.ModelStore` over HTTP so that
+worker nodes can discover available models and pull their assigned shards.
 
-Endpoints:
-    GET /health                        — liveness + disk info
-    GET /registry                      — full store index
-    GET /models                        — list of model IDs
-    GET /models/{model_id}/files       — file list for a model
-    GET /models/{model_id}/{path:.*}   — file content (Range-aware)
+The server is started as a long-running async task in :func:`exo.main.Node.run`
+alongside all other node components.  It is never started on non-store-host
+nodes.
+
+Design decisions
+----------------
+* **aiohttp** is used for the HTTP layer (already a transitive dependency via
+  EXO's download stack) rather than adding FastAPI/uvicorn overhead.
+* **Range request support** (HTTP 206 Partial Content) enables resumable
+  transfers: if a worker's staging is interrupted, it resumes from the byte
+  offset where it stopped rather than restarting the file from scratch.
+* **Chunked streaming** (8 MB chunks) keeps memory usage bounded even for
+  20+ GB model files.
+* **Path traversal protection**: all requested file paths are resolved and
+  checked to be within the model directory before any I/O is performed.
+* The server does **not** require authentication — it is intended for
+  trusted LAN use only.  Do not expose port 58080 to untrusted networks.
+
+HTTP API
+--------
+All endpoints return JSON unless noted.
+
+``GET /health``
+    Liveness check.  Returns store path, and disk usage (free/used/total
+    bytes).  Useful for monitoring and for clients to verify connectivity
+    before attempting a staging operation.
+
+``GET /registry``
+    Full store index as a JSON array of
+    :class:`~exo.store.model_store.StoreModelEntry` objects.  Useful for
+    management scripts and future dashboard integration.
+
+``GET /models``
+    JSON array of model ID strings currently in the store.
+
+``GET /models/{model_id}/files``
+    JSON array of file paths (relative to the model directory) for the
+    given *model_id*.  ``model_id`` may contain ``/`` encoded as ``%2F``.
+    Returns 404 if the model is not in the store.
+
+``GET /models/{model_id}/{path}``
+    File content.  Supports the ``Range: bytes=<start>-<end>`` header for
+    partial/resumable downloads.  Returns 200 (full file) or 206 (partial).
+    Returns 404 if the model or file is not found.
+
+Example requests::
+
+    curl http://mac-studio-1:58080/health
+    curl http://mac-studio-1:58080/models
+    curl http://mac-studio-1:58080/models/mlx-community%2FQwen3-30B-A3B-4bit/files
+    curl -H "Range: bytes=0-8388607" \\
+         http://mac-studio-1:58080/models/mlx-community%2FQwen3-30B-A3B-4bit/config.json
 """
 from __future__ import annotations
 
@@ -21,26 +70,52 @@ import aiofiles.os as aios
 import aiohttp.web as web
 from loguru import logger
 
-from exo.store.fox_model_store import FoxModelStore
+from exo.store.model_store import ModelStore
 
-_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
+_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB per streaming chunk
 
 
 def _sanitize_model_id(model_id: str) -> str:
-    """URL-decode any %2F in the model_id match (aiohttp leaves them encoded)."""
+    """URL-decode ``%2F`` in a model_id path segment.
+
+    aiohttp leaves percent-encoded slashes encoded in ``match_info``, so a
+    model ID like ``mlx-community/Qwen3`` arrives as
+    ``mlx-community%2FQwen3``.  This helper normalises it back.
+    """
     return model_id.replace("%2F", "/")
 
 
 @final
-class FoxStoreServer:
-    """aiohttp HTTP server that serves model files from the store host."""
+class ModelStoreServer:
+    """aiohttp HTTP server that serves model files from the store host.
+
+    Lifecycle::
+
+        server = ModelStoreServer(store, port=58080)
+        await server.start()   # called once on startup
+        # ... runs until shutdown ...
+        await server.stop()    # called on graceful shutdown
+
+    In practice, :func:`start` is passed directly to the node's
+    :class:`~exo.utils.task_group.TaskGroup` and :func:`stop` is not called
+    explicitly — the task is cancelled when the task group shuts down.
+    """
 
     def __init__(
         self,
-        store: FoxModelStore,
+        store: ModelStore,
         host: str = "0.0.0.0",
         port: int = 58080,
     ) -> None:
+        """
+        Args:
+            store: The :class:`~exo.store.model_store.ModelStore` instance
+                to serve files from.
+            host: Bind address.  Defaults to ``"0.0.0.0"`` (all interfaces).
+                Set to ``"127.0.0.1"`` for localhost-only access (e.g. tests).
+            port: TCP port to listen on.  Must match ``store_port`` in
+                ``exo.yaml`` so that worker nodes can reach this server.
+        """
         self._store = store
         self._host = host
         self._port = port
@@ -52,34 +127,33 @@ class FoxStoreServer:
         self._app.router.add_get("/health", self._handle_health)
         self._app.router.add_get("/registry", self._handle_registry)
         self._app.router.add_get("/models", self._handle_models)
-        self._app.router.add_get(
-            "/models/{model_id}/files", self._handle_model_files
-        )
-        self._app.router.add_get(
-            "/models/{model_id}/{path:.*}", self._handle_file
-        )
+        self._app.router.add_get("/models/{model_id}/files", self._handle_model_files)
+        self._app.router.add_get("/models/{model_id}/{path:.*}", self._handle_file)
 
     async def start(self) -> None:
+        """Start the HTTP server.  Blocks until the server is stopped."""
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
         logger.info(
-            f"FoxStoreServer listening on {self._host}:{self._port} "
+            f"ModelStoreServer listening on {self._host}:{self._port} "
             f"(store: {self._store.store_path})"
         )
 
     async def stop(self) -> None:
+        """Gracefully shut down the HTTP server."""
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
-            logger.info("FoxStoreServer stopped")
+            logger.info("ModelStoreServer stopped")
 
     # ------------------------------------------------------------------
     # Request handlers
     # ------------------------------------------------------------------
 
     async def _handle_health(self, _request: web.Request) -> web.Response:
+        """``GET /health`` — liveness check with disk usage stats."""
         store_path = self._store.store_path
         disk = shutil.disk_usage(store_path)
         return web.json_response(
@@ -92,14 +166,17 @@ class FoxStoreServer:
         )
 
     async def _handle_registry(self, _request: web.Request) -> web.Response:
+        """``GET /registry`` — full store index."""
         models = self._store.list_models()
         return web.json_response([m.model_dump() for m in models])
 
     async def _handle_models(self, _request: web.Request) -> web.Response:
+        """``GET /models`` — list of model IDs in the store."""
         models = self._store.list_models()
         return web.json_response([m.model_id for m in models])
 
     async def _handle_model_files(self, request: web.Request) -> web.Response:
+        """``GET /models/{model_id}/files`` — file list for a model."""
         model_id = _sanitize_model_id(request.match_info["model_id"])
         model_path = self._store.get_store_path(model_id)
         if model_path is None:
@@ -112,6 +189,7 @@ class FoxStoreServer:
         return web.json_response(files)
 
     async def _handle_file(self, request: web.Request) -> web.StreamResponse:
+        """``GET /models/{model_id}/{path}`` — file content with Range support."""
         model_id = _sanitize_model_id(request.match_info["model_id"])
         file_rel = request.match_info["path"]
 
@@ -119,10 +197,10 @@ class FoxStoreServer:
         if model_path is None:
             raise web.HTTPNotFound(reason=f"Model not in store: {model_id}")
 
-        # Security: prevent path traversal
+        # Security: resolve symlinks and reject any path outside the model dir
         resolved = (model_path / file_rel).resolve()
         if not str(resolved).startswith(str(model_path.resolve())):
-            raise web.HTTPBadRequest(reason="Path traversal attempt")
+            raise web.HTTPBadRequest(reason="Path traversal attempt rejected")
 
         if not (await aios.path.exists(resolved)) or not (
             await aios.path.isfile(resolved)
@@ -176,5 +254,3 @@ class FoxStoreServer:
 
         await response.write_eof()
         return response
-
-

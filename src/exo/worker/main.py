@@ -43,7 +43,7 @@ from exo.shared.types.worker.downloads import DownloadCompleted
 from exo.shared.types.worker.runners import RunnerId
 from exo.shared.types.worker.shards import ShardMetadata
 from exo.store.config import StagingNodeConfig
-from exo.store.fox_store_client import FoxStoreClient
+from exo.store.model_store_client import ModelStoreClient
 from exo.utils.channels import Receiver, Sender, channel
 from exo.utils.info_gatherer.info_gatherer import GatheredInfo, InfoGatherer
 from exo.utils.info_gatherer.net_profile import check_reachable
@@ -64,7 +64,7 @@ class Worker:
         # but I think it's the correct way to be thinking about commands
         command_sender: Sender[ForwarderCommand],
         download_command_sender: Sender[ForwarderDownloadCommand],
-        store_client: FoxStoreClient | None = None,
+        store_client: ModelStoreClient | None = None,
         staging_config: StagingNodeConfig | None = None,
     ):
         self.node_id: NodeId = node_id
