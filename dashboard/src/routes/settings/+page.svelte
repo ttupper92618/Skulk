@@ -97,7 +97,12 @@
     };
   }
 
+  const canSave = $derived(
+    !enabled || (storeHost.trim() !== "" && storePath.trim() !== ""),
+  );
+
   async function handleSave() {
+    if (!canSave) return;
     saving = true;
     saveMessage = null;
     saveError = null;
@@ -380,11 +385,16 @@
         <div class="flex items-center gap-4">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !canSave}
             class="px-6 py-2 bg-exo-yellow text-exo-black font-mono text-sm uppercase tracking-wider rounded hover:bg-exo-yellow/90 disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving…" : "Save"}
           </button>
+          {#if enabled && !canSave}
+            <div class="text-sm font-mono text-red-400">
+              Store Host and Store Path are required when enabled
+            </div>
+          {/if}
           {#if saveMessage}
             <div class="text-sm font-mono text-exo-yellow">
               {saveMessage}
