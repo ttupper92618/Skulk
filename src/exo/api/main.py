@@ -1964,7 +1964,7 @@ class API:
 
     async def browse_filesystem(self, path: str = "/Volumes") -> JSONResponse:
         resolved = Path(path).resolve()
-        if not any(str(resolved).startswith(root) for root in self._ALLOWED_BROWSE_ROOTS):
+        if not any(resolved.is_relative_to(root) for root in self._ALLOWED_BROWSE_ROOTS):
             raise HTTPException(status_code=400, detail="Path outside allowed roots")
         if not resolved.is_dir():
             raise HTTPException(status_code=400, detail="Path is not a directory")
