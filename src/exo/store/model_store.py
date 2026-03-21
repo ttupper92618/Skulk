@@ -301,21 +301,27 @@ class ModelStore:
         Deduplicates: if the model is already downloading, returns the
         existing status.  If already in the store, returns "complete".
         """
+        logger.info(f"ModelStore.request_download called for {model_id}")
         async with self._download_lock:
             existing = self._active_downloads.get(model_id)
             if existing is not None:
                 # Allow retrying failed downloads
                 if existing.status == "failed":
+                    logger.info(f"ModelStore: clearing failed download for {model_id}, will retry")
                     del self._active_downloads[model_id]
                 else:
+                    logger.info(f"ModelStore: download already in progress for {model_id}: {existing.status}")
                     return existing
             if self.is_in_store(model_id):
+                logger.info(f"ModelStore: {model_id} already in store")
                 return StoreDownloadStatus(model_id=model_id, status="complete", progress=1.0)
             status = StoreDownloadStatus(model_id=model_id, status="pending")
             self._active_downloads[model_id] = status
+        logger.info(f"ModelStore: creating download task for {model_id}")
         task = asyncio.create_task(self._do_download(model_id))
         self._download_tasks.add(task)
         task.add_done_callback(self._download_tasks.discard)
+        logger.info(f"ModelStore: download task created for {model_id}, task={task}")
         return status
 
     def get_download_status(self, model_id: str) -> StoreDownloadStatus | None:
