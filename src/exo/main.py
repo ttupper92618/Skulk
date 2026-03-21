@@ -104,12 +104,19 @@ class Node:
 
             # Register the node-local staging directory in the model search
             # path so that build_model_path() / MLX finds staged models.
-            # Only the staging dir — not the store's canonical path — so that
-            # inference always uses the local copy, not the network store.
-            from exo.shared.constants import add_model_search_path
+            # Set via environment variable so that runner subprocesses
+            # (spawned via multiprocessing) also pick it up at import time.
             staging_cfg = resolve_node_staging(ms, str(node_id))
+            staging_path = str(Path(staging_cfg.node_cache_path).expanduser())
+            existing_path = os.environ.get("EXO_MODELS_PATH", "")
+            paths = [p for p in existing_path.split(":") if p]
+            if staging_path not in paths:
+                paths.append(staging_path)
+            os.environ["EXO_MODELS_PATH"] = ":".join(paths)
+            # Also update the in-process constants for the main process
+            from exo.shared.constants import add_model_search_path
             add_model_search_path(Path(staging_cfg.node_cache_path))
-            logger.info(f"ModelStore: added staging path {staging_cfg.node_cache_path} to model search path")
+            logger.info(f"ModelStore: added staging path {staging_path} to EXO_MODELS_PATH")
 
         # Create DownloadCoordinator (unless --no-downloads)
         if not args.no_downloads:
