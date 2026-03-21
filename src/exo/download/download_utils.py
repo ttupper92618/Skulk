@@ -116,11 +116,16 @@ def resolve_model_in_path(model_id: ModelId) -> Path | None:
     Checks each directory for the normalized name (org--model).  A candidate
     is only returned if ``is_model_directory_complete`` confirms all weight
     files are present.
+
+    Reads the search path dynamically from ``exo.shared.constants`` so that
+    paths added at runtime (e.g. by the model store) are picked up.
     """
-    if EXO_MODELS_PATH is None:
+    import exo.shared.constants as _constants
+    search_path = _constants.EXO_MODELS_PATH
+    if search_path is None:
         return None
     normalized = model_id.normalize()
-    for search_dir in EXO_MODELS_PATH:
+    for search_dir in search_path:
         candidate = search_dir / normalized
         if candidate.is_dir() and is_model_directory_complete(candidate):
             return candidate

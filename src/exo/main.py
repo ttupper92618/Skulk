@@ -102,6 +102,16 @@ class Node:
                     f"store at {ms.store_path}, server on port {ms.store_port}"
                 )
 
+            # Register store paths in the model search path so that
+            # build_model_path() / MLX can find models in the staging
+            # directory or the store's canonical directory.
+            from exo.shared.constants import add_model_search_path
+            staging_cfg = resolve_node_staging(ms, str(node_id))
+            add_model_search_path(Path(staging_cfg.node_cache_path))
+            if is_store_host:
+                add_model_search_path(Path(ms.store_path))
+            logger.info(f"ModelStore: added store paths to model search path")
+
         # Create DownloadCoordinator (unless --no-downloads)
         if not args.no_downloads:
             base_downloader = exo_shard_downloader(offline=args.offline)

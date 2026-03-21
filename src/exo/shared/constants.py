@@ -36,11 +36,26 @@ EXO_MODELS_DIR = (
 
 # Read-only search path for pre-downloaded models (colon-separated directories)
 _EXO_MODELS_PATH_ENV = os.environ.get("EXO_MODELS_PATH", None)
+_extra_model_paths: list[Path] = []
 EXO_MODELS_PATH: tuple[Path, ...] | None = (
     tuple(Path(p).expanduser() for p in _EXO_MODELS_PATH_ENV.split(":") if p)
     if _EXO_MODELS_PATH_ENV is not None
     else None
 )
+
+
+def add_model_search_path(path: Path) -> None:
+    """Add a directory to the model search path at runtime.
+
+    Used by the model store to make the staging directory searchable
+    by ``build_model_path`` / ``resolve_model_in_path``.
+    """
+    global EXO_MODELS_PATH
+    expanded = path.expanduser()
+    if expanded not in _extra_model_paths:
+        _extra_model_paths.append(expanded)
+    existing = list(EXO_MODELS_PATH) if EXO_MODELS_PATH else []
+    EXO_MODELS_PATH = tuple(existing + _extra_model_paths)
 
 _RESOURCES_DIR_ENV = os.environ.get("EXO_RESOURCES_DIR", None)
 RESOURCES_DIR = (
