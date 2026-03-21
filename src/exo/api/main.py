@@ -1925,11 +1925,16 @@ class API:
             ExoConfig.model_validate(config_data)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc))
+        config_yaml = yaml.safe_dump(config_data, default_flow_style=False, sort_keys=False)
+        # Write locally
         with self._config_path.open("w") as f:
-            yaml.safe_dump(config_data, f, default_flow_style=False, sort_keys=False)
+            f.write(config_yaml)
+        # Broadcast to all nodes via the download commands topic (gossipsub)
+        from exo.shared.types.commands import SyncConfig
+        await self._send_download(SyncConfig(config_yaml=config_yaml))
         return JSONResponse({
             "success": True,
-            "message": "Config saved. Restart exo for changes to take effect.",
+            "message": "Config saved and synced to cluster. Restart exo for changes to take effect.",
             "requiresRestart": True,
         })
 
