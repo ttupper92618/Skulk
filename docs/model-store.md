@@ -114,11 +114,13 @@ src/exo/store/
 
 - All nodes running the same exo build
 - The store host node has the storage device mounted and accessible at `store_path`
-- Port `58080` (or your configured `store_port`) is reachable from all worker
-  nodes — no firewall blocking
 - Config is distributed automatically when using the dashboard Settings page.
   If configuring manually, `exo.yaml` must be present at the project root on
-  **every node** (or absent to fall back to standard behaviour on that node).
+  **every node** (or absent to fall back to standard behaviour on that node)
+
+The store server uses port `58080` for model file transfers over the same
+Thunderbolt/ethernet links that exo already uses for the cluster ring network.
+No additional network configuration is needed.
 
 ---
 
