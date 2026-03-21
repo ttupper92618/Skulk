@@ -86,6 +86,7 @@ from exo.shared.types.worker.shards import ShardMetadata
 from exo.store.config import StagingNodeConfig
 
 _CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB per read/write chunk
+_STORE_MANIFEST = ".store_manifest"  # written after successful staging
 _CONNECT_TIMEOUT = 10.0          # seconds — abort if store host unreachable
 _READ_TIMEOUT = 120.0            # seconds — abort if no data for 2 minutes
 
@@ -340,6 +341,11 @@ class ModelStoreClient:
             if on_progress is not None:
                 await on_progress(staged_bytes, total_bytes)
 
+        # Write a manifest so the warm-cache check can verify completeness.
+        rel_files = [str(p.relative_to(source_dir)) for p in files]
+        manifest_path = dest_path / _STORE_MANIFEST
+        manifest_path.write_text("\n".join(rel_files) + "\n")
+
         logger.info(
             f"ModelStoreClient: staged {model_id} locally to {dest_path} "
             f"({total_bytes:,} bytes)"
@@ -484,6 +490,11 @@ class ModelStoreClient:
             )
             bytes_done += file_bytes
 
+        # Write a manifest so the warm-cache check can verify completeness
+        # without hitting the store server.
+        manifest_path = dest_path / _STORE_MANIFEST
+        manifest_path.write_text("\n".join(file_list) + "\n")
+
         logger.info(
             f"ModelStoreClient: staged {model_id} to {dest_path} ({bytes_done:,} bytes)"
         )
@@ -601,22 +612,17 @@ class ModelStoreDownloader(ShardDownloader):
             return await self._inner.ensure_shard(shard, config_only)
 
         # Fast path: if the model is already fully staged locally, skip the
-        # HTTP availability probe.  This keeps inference working when the store
-        # server is temporarily unreachable (e.g. still starting up) and avoids
-        # an unnecessary round-trip for the warm-cache case.
-        #
-        # We only consider the cache valid when it contains at least one real
-        # file and no leftover ``.partial`` temporaries (which indicate an
-        # interrupted download).
+        # HTTP availability probe.  We verify completeness using the manifest
+        # written after a successful stage — this prevents treating a partially
+        # staged directory (e.g. crash after config.json but before safetensors)
+        # as ready.
         dest_path = _staging_dir(self._staging_config.node_cache_path, model_id)
-        if dest_path.exists():
-            has_real_files = any(
-                p for p in dest_path.rglob("*") if p.is_file() and not p.name.endswith(".partial")
-            )
-            has_partial_files = any(
-                p for p in dest_path.rglob("*.partial") if p.is_file()
-            )
-            if has_real_files and not has_partial_files:
+        manifest_path = dest_path / _STORE_MANIFEST
+        if manifest_path.exists():
+            expected_files = [f for f in manifest_path.read_text().strip().splitlines() if f]
+            all_present = all((dest_path / f).exists() for f in expected_files)
+            no_partials = not any(dest_path.rglob("*.partial"))
+            if expected_files and all_present and no_partials:
                 logger.info(
                     f"ModelStoreDownloader: {model_id} already staged at {dest_path} — skipping availability probe"
                 )
@@ -711,17 +717,15 @@ class ModelStoreDownloader(ShardDownloader):
                     status="complete",
                 )
 
-        # Check staged cache path
+        # Check staged cache path (manifest-verified)
         if self._staging_config.enabled:
             dest_path = _staging_dir(self._staging_config.node_cache_path, model_id)
-            if dest_path.exists():
-                has_real = any(
-                    p for p in dest_path.rglob("*") if p.is_file() and not p.name.endswith(".partial")
-                )
-                has_partial = any(
-                    p for p in dest_path.rglob("*.partial") if p.is_file()
-                )
-                if has_real and not has_partial:
+            manifest_path = dest_path / _STORE_MANIFEST
+            if manifest_path.exists():
+                expected = [f for f in manifest_path.read_text().strip().splitlines() if f]
+                all_present = all((dest_path / f).exists() for f in expected)
+                no_partials = not any(dest_path.rglob("*.partial"))
+                if expected and all_present and no_partials:
                     return RepoDownloadProgress(
                         repo_id=model_id,
                         repo_revision="store",
