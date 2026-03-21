@@ -37,6 +37,7 @@ exo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
 > - **Auto-detect existing models** — scan a selected store path for existing model directories and auto-register them
 > - **Storage recommendations** — show available disk space per volume in the directory browser, highlight the best option, warn on low space
 > - **Manual shard placement** — control which layers run on which nodes, adjust sharding to target specific machines and manage memory pressure on a per-node basis
+> - **Sub-cluster definitions** — define node groups so a model can be targeted to only certain nodes, enabling model-specific sub-clusters within a single physical cluster (e.g. dedicate 2 nodes to a coding model and 2 to a chat model simultaneously)
 > - **Cross-platform support** — Linux CUDA and CPU support for the model store, with platform-aware filesystem browsing
 
 ---
