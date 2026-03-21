@@ -13,6 +13,8 @@ export default defineConfig({
       "/config": "http://localhost:52415",
       "/store": "http://localhost:52415",
       "/download": "http://localhost:52415",
+      "/filesystem": "http://localhost:52415",
+      "/node": "http://localhost:52415",
     },
   },
 });

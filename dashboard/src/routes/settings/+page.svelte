@@ -5,9 +5,12 @@
     fetchConfig,
     updateConfig,
     fetchStoreHealth,
+    fetchNodeIdentity,
     type ConfigResponse,
     type StoreHealthResponse,
+    type NodeIdentityResponse,
   } from "$lib/stores/app.svelte";
+  import DirectoryBrowser from "$lib/components/DirectoryBrowser.svelte";
 
   let loading = $state(true);
   let saving = $state(false);
@@ -16,6 +19,10 @@
   let storeHealth = $state<StoreHealthResponse | null>(null);
   let fileExists = $state(false);
   let configPath = $state("");
+
+  // Node identity (fetched on mount)
+  let nodeIdentity = $state<NodeIdentityResponse | null>(null);
+  let isThisNodeStoreHost = $state(false);
 
   // Form state — model_store section
   let enabled = $state(true);
@@ -43,6 +50,12 @@
     storeHttpHost = (ms.store_http_host as string) ?? "";
     storePort = (ms.store_port as number) ?? 58080;
     storePath = (ms.store_path as string) ?? "";
+    // Detect if this node is the configured store host
+    if (nodeIdentity && storeHost) {
+      isThisNodeStoreHost =
+        storeHost === nodeIdentity.hostname ||
+        storeHost === nodeIdentity.nodeId;
+    }
     const dl = ms.download as Record<string, unknown> | undefined;
     allowHfFallback = (dl?.allow_hf_fallback as boolean) ?? true;
     const stg = ms.staging as Record<string, unknown> | undefined;
@@ -134,12 +147,25 @@
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
   }
 
+  function handleStoreHostToggle(isHost: boolean) {
+    isThisNodeStoreHost = isHost;
+    if (isHost && nodeIdentity) {
+      storeHost = nodeIdentity.hostname;
+      storeHttpHost = nodeIdentity.ipAddress;
+    } else {
+      storeHost = "";
+      storeHttpHost = "";
+    }
+  }
+
   onMount(async () => {
     try {
-      const [configData, health] = await Promise.all([
+      const [configData, health, identity] = await Promise.all([
         fetchConfig(),
         fetchStoreHealth(),
+        fetchNodeIdentity(),
       ]);
+      nodeIdentity = identity;
       loadConfig(configData);
       storeHealth = health;
     } catch (err) {
@@ -232,27 +258,46 @@
             />
             <span class="text-sm">Enabled</span>
           </label>
+          <!-- Store host toggle -->
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isThisNodeStoreHost}
+              onchange={(e) => handleStoreHostToggle(e.currentTarget.checked)}
+              class="w-4 h-4 accent-exo-yellow"
+            />
+            <span class="text-sm">This node is the store host</span>
+          </label>
+          {#if isThisNodeStoreHost && nodeIdentity}
+            <div class="text-sm text-exo-light-gray bg-exo-black/40 rounded px-3 py-2 font-mono">
+              Serving as <span class="text-white">{nodeIdentity.hostname}</span>
+              <span class="text-exo-light-gray/50">({nodeIdentity.ipAddress})</span>
+            </div>
+          {:else}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <label for="store-host" class="text-xs text-exo-light-gray uppercase tracking-wide">Store Host</label>
+                <input
+                  id="store-host"
+                  type="text"
+                  bind:value={storeHost}
+                  placeholder="e.g. mac-studio-1"
+                  class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white placeholder:text-exo-light-gray/30 focus:border-exo-yellow focus:outline-none"
+                />
+              </div>
+              <div class="space-y-1">
+                <label for="store-http-host" class="text-xs text-exo-light-gray uppercase tracking-wide">HTTP Host <span class="text-exo-light-gray/50">(optional)</span></label>
+                <input
+                  id="store-http-host"
+                  type="text"
+                  bind:value={storeHttpHost}
+                  placeholder="defaults to store host"
+                  class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white placeholder:text-exo-light-gray/30 focus:border-exo-yellow focus:outline-none"
+                />
+              </div>
+            </div>
+          {/if}
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1">
-              <label for="store-host" class="text-xs text-exo-light-gray uppercase tracking-wide">Store Host</label>
-              <input
-                id="store-host"
-                type="text"
-                bind:value={storeHost}
-                placeholder="e.g. mac-studio-1"
-                class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white placeholder:text-exo-light-gray/30 focus:border-exo-yellow focus:outline-none"
-              />
-            </div>
-            <div class="space-y-1">
-              <label for="store-http-host" class="text-xs text-exo-light-gray uppercase tracking-wide">HTTP Host <span class="text-exo-light-gray/50">(optional)</span></label>
-              <input
-                id="store-http-host"
-                type="text"
-                bind:value={storeHttpHost}
-                placeholder="defaults to store host"
-                class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white placeholder:text-exo-light-gray/30 focus:border-exo-yellow focus:outline-none"
-              />
-            </div>
             <div class="space-y-1">
               <label for="store-port" class="text-xs text-exo-light-gray uppercase tracking-wide">Store Port</label>
               <input
@@ -262,17 +307,8 @@
                 class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white focus:border-exo-yellow focus:outline-none"
               />
             </div>
-            <div class="space-y-1">
-              <label for="store-path" class="text-xs text-exo-light-gray uppercase tracking-wide">Store Path</label>
-              <input
-                id="store-path"
-                type="text"
-                bind:value={storePath}
-                placeholder="/Volumes/ModelStore/models"
-                class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white placeholder:text-exo-light-gray/30 focus:border-exo-yellow focus:outline-none"
-              />
-            </div>
           </div>
+          <DirectoryBrowser bind:value={storePath} onselect={(p) => (storePath = p)} label="Store Path" />
         </fieldset>
 
         <!-- Download Policy -->
@@ -306,17 +342,7 @@
             />
             <span class="text-sm">Staging enabled</span>
           </label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1">
-              <label for="cache-path" class="text-xs text-exo-light-gray uppercase tracking-wide">Node Cache Path</label>
-              <input
-                id="cache-path"
-                type="text"
-                bind:value={nodeCachePath}
-                class="w-full bg-exo-dark-gray border border-exo-medium-gray/40 rounded px-3 py-2 text-sm font-mono text-white focus:border-exo-yellow focus:outline-none"
-              />
-            </div>
-          </div>
+          <DirectoryBrowser bind:value={nodeCachePath} onselect={(p) => (nodeCachePath = p)} label="Node Cache Path" />
           <label class="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -353,14 +379,7 @@
                 </button>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="space-y-1">
-                  <label class="text-xs text-exo-light-gray uppercase tracking-wide">Cache Path</label>
-                  <input
-                    type="text"
-                    bind:value={override.nodeCachePath}
-                    class="w-full bg-exo-black/40 border border-exo-medium-gray/40 rounded px-3 py-1.5 text-sm font-mono text-white focus:border-exo-yellow focus:outline-none"
-                  />
-                </div>
+                <DirectoryBrowser bind:value={override.nodeCachePath} onselect={(p) => (override.nodeCachePath = p)} label="Cache Path" />
               </div>
               <label class="flex items-center gap-3 cursor-pointer">
                 <input

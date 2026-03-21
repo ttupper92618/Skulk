@@ -2,6 +2,7 @@ import base64
 import contextlib
 import json
 import random
+import socket
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from datetime import datetime, timezone
@@ -368,6 +369,8 @@ class API:
         self.app.put("/config")(self.update_config)
         self.app.get("/store/health")(self.get_store_health)
         self.app.get("/store/registry")(self.get_store_registry)
+        self.app.get("/filesystem/browse")(self.browse_filesystem)
+        self.app.get("/node/identity")(self.get_node_identity)
 
     async def place_instance(self, payload: PlaceInstanceParams):
         command = PlaceInstance(
@@ -1956,3 +1959,39 @@ class API:
             raise HTTPException(status_code=503, detail="Store not configured")
         entries = await self._store_client.fetch_registry()
         return JSONResponse({"entries": entries})
+
+    _ALLOWED_BROWSE_ROOTS = ["/Volumes", "/home", "/mnt", "/tmp", "/opt"]
+
+    async def browse_filesystem(self, path: str = "/Volumes") -> JSONResponse:
+        resolved = Path(path).resolve()
+        if not any(str(resolved).startswith(root) for root in self._ALLOWED_BROWSE_ROOTS):
+            raise HTTPException(status_code=400, detail="Path outside allowed roots")
+        if not resolved.is_dir():
+            raise HTTPException(status_code=400, detail="Path is not a directory")
+        try:
+            dirs = sorted(
+                [
+                    {"name": d.name, "path": str(d)}
+                    for d in resolved.iterdir()
+                    if d.is_dir() and not d.name.startswith(".")
+                ],
+                key=lambda d: d["name"],
+            )
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        return JSONResponse({"path": str(resolved), "directories": dirs})
+
+    async def get_node_identity(self) -> JSONResponse:
+        hostname = socket.gethostname()
+        ip = hostname
+        network = self.state.node_network.get(self.node_id)
+        if network:
+            for iface in network.interfaces:
+                if iface.ip_address and not iface.ip_address.startswith("127."):
+                    ip = iface.ip_address
+                    break
+        return JSONResponse({
+            "nodeId": str(self.node_id),
+            "hostname": hostname,
+            "ipAddress": ip,
+        })

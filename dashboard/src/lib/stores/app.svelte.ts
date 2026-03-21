@@ -3424,3 +3424,34 @@ export const fetchStoreRegistry = async (): Promise<StoreRegistryEntry[]> => {
     return [];
   }
 };
+
+// Filesystem & Node Identity
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+}
+export interface BrowseResponse {
+  path: string;
+  directories: DirectoryEntry[];
+}
+export interface NodeIdentityResponse {
+  nodeId: string;
+  hostname: string;
+  ipAddress: string;
+}
+
+export const browseFilesystem = async (
+  path = "/Volumes",
+): Promise<BrowseResponse> => {
+  const resp = await fetch(
+    `/filesystem/browse?path=${encodeURIComponent(path)}`,
+  );
+  if (!resp.ok) throw new Error(`Browse failed: ${resp.status}`);
+  return await resp.json();
+};
+export const fetchNodeIdentity =
+  async (): Promise<NodeIdentityResponse> => {
+    const resp = await fetch("/node/identity");
+    if (!resp.ok) throw new Error(`Failed to fetch node identity: ${resp.status}`);
+    return await resp.json();
+  };
