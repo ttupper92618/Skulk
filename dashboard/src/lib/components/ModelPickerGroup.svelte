@@ -43,6 +43,7 @@
     downloadStatusMap?: Map<string, DownloadAvailability>;
     launchedAt?: number;
     instanceStatuses?: Record<string, { status: string; statusClass: string }>;
+    mode?: "launch" | "store-download";
   };
 
   let {
@@ -60,6 +61,7 @@
     downloadStatusMap,
     launchedAt,
     instanceStatuses = {},
+    mode = "launch",
   }: ModelPickerGroupProps = $props();
 
   // Group-level download status: show if any variant is downloaded
@@ -167,7 +169,9 @@
       ? 'bg-exo-yellow/10 border-l-2 border-exo-yellow'
       : 'border-l-2 border-transparent'}"
     onclick={() => {
-      if (group.hasMultipleVariants) {
+      if (mode === "store-download") {
+        onToggleExpand();
+      } else if (group.hasMultipleVariants) {
         onToggleExpand();
       } else {
         const modelId = group.variants[0]?.id;
@@ -181,7 +185,9 @@
     onkeydown={(e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        if (group.hasMultipleVariants) {
+        if (mode === "store-download") {
+          onToggleExpand();
+        } else if (group.hasMultipleVariants) {
           onToggleExpand();
         } else {
           const modelId = group.variants[0]?.id;
@@ -483,6 +489,24 @@
         />
       </svg>
     </button>
+    {#if mode === "store-download" && !group.hasMultipleVariants}
+      <button
+        type="button"
+        class="p-1 rounded hover:bg-exo-yellow/10 transition-colors flex-shrink-0"
+        onclick={(e) => {
+          e.stopPropagation();
+          const modelId = group.variants[0]?.id;
+          if (modelId) onSelectModel(modelId);
+        }}
+        title="Download to store"
+      >
+        <svg class="w-4 h-4 text-exo-yellow/60 hover:text-exo-yellow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12" />
+          <path d="M7 12l5 5 5-5" />
+          <path d="M5 21h14" />
+        </svg>
+      </button>
+    {/if}
   </div>
 
   <!-- Expanded variants -->
@@ -503,14 +527,14 @@
           role="button"
           tabindex="0"
           onclick={() => {
-            if (modelCanFit || variantHasInstance) {
+            if (mode !== "store-download" && (modelCanFit || variantHasInstance)) {
               onSelectModel(variant.id);
             }
           }}
           onkeydown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              if (modelCanFit) {
+              if (mode !== "store-download" && modelCanFit) {
                 onSelectModel(variant.id);
               }
             }
@@ -642,6 +666,23 @@
               />
             </svg>
           </button>
+          {#if mode === "store-download"}
+            <button
+              type="button"
+              class="p-1 rounded hover:bg-exo-yellow/10 transition-colors flex-shrink-0"
+              onclick={(e) => {
+                e.stopPropagation();
+                onSelectModel(variant.id);
+              }}
+              title="Download to store"
+            >
+              <svg class="w-4 h-4 text-exo-yellow/60 hover:text-exo-yellow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12" />
+                <path d="M7 12l5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+            </button>
+          {/if}
         </div>
       {/each}
     </div>

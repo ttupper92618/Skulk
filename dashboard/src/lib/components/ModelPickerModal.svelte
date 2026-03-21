@@ -84,6 +84,9 @@
       }
     >;
     instanceStatuses?: Record<string, InstanceStatus>;
+    /** When "store-download", model rows show a download icon instead of
+     *  being directly clickable. onSelect is called when the icon is clicked. */
+    mode?: "launch" | "store-download";
   };
 
   let {
@@ -106,6 +109,7 @@
     downloadsData,
     topologyNodes,
     instanceStatuses = {},
+    mode = "launch",
   }: ModelPickerModalProps = $props();
 
   // Local state
@@ -924,6 +928,7 @@
                 {getModelFitStatus}
                 onToggleExpand={() => toggleGroupExpanded(group.id)}
                 onSelectModel={handleSelect}
+                {mode}
                 {onToggleFavorite}
                 onShowInfo={(g) => (infoGroup = g)}
                 downloadStatusMap={getVariantDownloadMap(group)}
@@ -995,6 +1000,7 @@
               {getModelFitStatus}
               onToggleExpand={() => toggleGroupExpanded(group.id)}
               onSelectModel={handleSelect}
+                {mode}
               {onToggleFavorite}
               onShowInfo={(g) => (infoGroup = g)}
               downloadStatusMap={getVariantDownloadMap(group)}
@@ -1024,6 +1030,7 @@
               {getModelFitStatus}
               onToggleExpand={() => toggleGroupExpanded(group.id)}
               onSelectModel={handleSelect}
+                {mode}
               {onToggleFavorite}
               onShowInfo={(g) => (infoGroup = g)}
               downloadStatusMap={getVariantDownloadMap(group)}
