@@ -15,6 +15,21 @@ exo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
 
 </div>
 
+> **This is the Foxlight fork of exo.** It extends upstream exo with a
+> **centralized model store** — one node in your cluster holds all model
+> files and serves them to every other node over the local network. No
+> more redundant HuggingFace downloads, no wasted storage on every
+> machine, and full offline capability after the first download.
+>
+> **What this fork adds:**
+> - **Model Store** — designate one node as the store host; all other nodes stage models from it over Thunderbolt/LAN instead of downloading from HuggingFace independently
+> - **Store-first downloads** — when a model is launched that isn't in the store, the store host downloads it from HuggingFace on behalf of the entire cluster (nodes never download from HF directly)
+> - **Settings page** (`/#/settings`) — configure the store from the dashboard with a one-click "this node is the store host" toggle and a filesystem browser for selecting the store path
+> - **Store Registry** (`/#/downloads`) — browse models in the store, see download progress, find and download new models, delete models, see which models are active
+> - **Cluster-wide config sync** — config changes made from the dashboard are broadcast to all nodes automatically via gossipsub
+>
+> See [docs/model-store.md](docs/model-store.md) for full documentation.
+
 ---
 
 exo connects all your devices into an AI cluster. Not only does exo enable running models larger than would fit on a single device, but with [day-0 support for RDMA over Thunderbolt](https://x.com/exolabs/status/2001817749744476256?s=20), makes models run faster as you add more devices.
