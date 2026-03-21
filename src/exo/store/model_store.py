@@ -141,6 +141,7 @@ class ModelStore:
         self._registry_path = store_path / "registry.json"
         self._active_downloads: dict[str, StoreDownloadStatus] = {}
         self._download_lock = asyncio.Lock()
+        self._download_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def store_path(self) -> Path:
@@ -313,7 +314,8 @@ class ModelStore:
             status = StoreDownloadStatus(model_id=model_id, status="pending")
             self._active_downloads[model_id] = status
         task = asyncio.create_task(self._do_download(model_id))
-        task.add_done_callback(lambda t: t.result() if not t.cancelled() and t.exception() is None else logger.error(f"ModelStore: download task for {model_id} failed: {t.exception()}") if t.exception() else None)
+        self._download_tasks.add(task)
+        task.add_done_callback(self._download_tasks.discard)
         return status
 
     def get_download_status(self, model_id: str) -> StoreDownloadStatus | None:
