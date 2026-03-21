@@ -29,6 +29,14 @@ exo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
 > - **Cluster-wide config sync** — config changes made from the dashboard are broadcast to all nodes automatically via gossipsub
 >
 > See [docs/model-store.md](docs/model-store.md) for full documentation.
+>
+> **Coming soon:**
+> - **Store host failover** — automatic fallback when the store host goes offline, with optional secondary store host and registry replication
+> - **Shard-aware staging** — only stage the safetensors files needed for a node's assigned layers, reducing local storage requirements and enabling models on nodes with less RAM
+> - **Offline/air-gapped hardening** — CLI commands for store management (`exo store list`, `exo store pull`), store integrity checks with hash verification, and cleaner error messaging
+> - **Auto-detect existing models** — scan a selected store path for existing model directories and auto-register them
+> - **Storage recommendations** — show available disk space per volume in the directory browser, highlight the best option, warn on low space
+> - **Cross-platform support** — Linux CUDA and CPU support for the model store, with platform-aware filesystem browsing
 
 ---
 
