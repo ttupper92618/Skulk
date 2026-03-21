@@ -1,3 +1,5 @@
+import asyncio
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -301,6 +303,19 @@ class DownloadCoordinator:
             logger.info(f"Successfully deleted model {model_id}")
         else:
             logger.warning(f"Model {model_id} was not found on disk")
+
+        # Also remove the staging directory if the model was downloaded from the
+        # store into a non-default location (e.g. ~/.exo/staging/<model>).
+        # delete_model() only removes EXO_MODELS_DIR, so the staged copy would
+        # otherwise survive and make the model reappear on the next activation.
+        if model_id in self.download_status:
+            current_status = self.download_status[model_id]
+            if isinstance(current_status, DownloadCompleted):
+                staging_dir = Path(current_status.model_directory)
+                standard_dir = Path(self._model_dir(model_id))
+                if staging_dir != standard_dir and staging_dir.exists():
+                    logger.info(f"Deleting staged model files at {staging_dir}")
+                    await asyncio.to_thread(shutil.rmtree, staging_dir, True)
 
         # Emit pending status to reset UI state, then remove from local tracking
         if model_id in self.download_status:

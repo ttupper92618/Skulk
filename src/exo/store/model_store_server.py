@@ -197,9 +197,13 @@ class ModelStoreServer:
         if model_path is None:
             raise web.HTTPNotFound(reason=f"Model not in store: {model_id}")
 
-        # Security: resolve symlinks and reject any path outside the model dir
+        # Security: resolve symlinks and reject any path outside the model dir.
+        # Use is_relative_to() rather than a startswith() string check — the
+        # latter is unsafe when one model directory name is a prefix of another
+        # (e.g. "...-4bit" vs "...-4bit-awq": "/store/model-2/f" starts with
+        # "/store/model" even though it escapes the intended boundary).
         resolved = (model_path / file_rel).resolve()
-        if not str(resolved).startswith(str(model_path.resolve())):
+        if not resolved.is_relative_to(model_path.resolve()):
             raise web.HTTPBadRequest(reason="Path traversal attempt rejected")
 
         if not (await aios.path.exists(resolved)) or not (

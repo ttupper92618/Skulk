@@ -312,6 +312,17 @@ class Worker:
         ):
             return
         model_id = str(shard.model_card.model_id)
+        # Skip eviction if another runner for the same model is still active —
+        # MLX loads weights lazily, so tearing down a sibling's staged files
+        # would corrupt the live runner.
+        if any(
+            str(r.shard_metadata.model_card.model_id) == model_id
+            for r in self.runners.values()
+        ):
+            logger.debug(
+                f"Worker: skipping eviction for {model_id} — another runner is still active"
+            )
+            return
         cache_path = Path(self._staging_config.node_cache_path).expanduser()
         try:
             await self._store_client.evict_shard(model_id, cache_path)

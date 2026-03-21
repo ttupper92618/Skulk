@@ -575,10 +575,20 @@ class ModelStoreDownloader(ShardDownloader):
         if not self._staging_config.enabled:
             return await self._inner.ensure_shard(shard, config_only)
 
+        # Fast path: if the model is already fully staged locally, skip the
+        # HTTP availability probe.  This keeps inference working when the store
+        # server is temporarily unreachable (e.g. still starting up) and avoids
+        # an unnecessary round-trip for the warm-cache case.
+        dest_path = _staging_dir(self._staging_config.node_cache_path, model_id)
+        if dest_path.exists() and any(dest_path.iterdir()):
+            logger.info(
+                f"ModelStoreDownloader: {model_id} already staged at {dest_path} — skipping availability probe"
+            )
+            return dest_path
+
         available = await self._store_client.is_model_available(model_id)
 
         if available:
-            dest_path = _staging_dir(self._staging_config.node_cache_path, model_id)
             logger.info(
                 f"ModelStoreDownloader: staging {model_id} from store → {dest_path}"
             )
