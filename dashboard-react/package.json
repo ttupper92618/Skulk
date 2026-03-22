@@ -1,0 +1,36 @@
+{
+  "name": "exo-dashboard-react",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tolgee/react": "^6.0.0",
+    "@tolgee/web": "^6.0.0",
+    "d3": "^7.9.0",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.27",
+    "marked": "^17.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "styled-components": "^6.1.13",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/styled-components": "^5.1.34",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}
