@@ -67,7 +67,6 @@ const LogoText = styled.span`
   font-weight: 700;
   font-family: ${({ theme }) => theme.fonts.mono};
   color: #FFD700;
-  letter-spacing: 4px;
   filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
 `;
 
@@ -195,7 +194,7 @@ export function HeaderNav({
           </ToggleBtn>
         )}
         <LogoBtn $disabled={!showHome} onClick={showHome ? onHome : undefined}>
-          <LogoText>EXO</LogoText>
+          <LogoText>EXOCluster</LogoText>
         </LogoBtn>
       </LeftGroup>
 
