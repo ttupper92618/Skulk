@@ -1,8 +1,9 @@
-import type { NodeInfo } from '../../types/topology';
+import type { NodeInfo, TopologyEdge } from '../../types/topology';
 import { detectDeviceModel } from '../../types/topology';
 import { DeviceIcon } from './DeviceIcon';
 import { GpuStatsBar } from './GpuStatsBar';
 import { NodeLabel } from './NodeLabel';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 export interface ClusterNodeProps {
   nodeId: string;
@@ -13,25 +14,86 @@ export interface ClusterNodeProps {
   y: number;
   /** Overall scale factor — controls the icon size; defaults to 1 */
   scale?: number;
+  /** When true, show the debug info icon on this node. */
+  debug?: boolean;
+  /** All edges in the topology (needed for debug connection info). */
+  edges?: TopologyEdge[];
+  /** All nodes (needed for interface name resolution in debug). */
+  allNodes?: Record<string, NodeInfo>;
 }
 
-/**
- * Composite node component: NodeLabel (above) + DeviceIcon (center) + GpuStatsBar (right) + memory stats (below).
- *
- * Layout (all values before `scale` is applied):
- *
- *           [ name ]              ← NodeLabel name
- *    ┌─────────────────┐ ┌───┐
- *    │   DeviceIcon    │ │GPU│   ← icon + stats bar
- *    └─────────────────┘ └───┘
- *      15.4GB/24GB (64%)         ← NodeLabel memory
- */
+function buildDebugContent(
+  nodeId: string,
+  nodeInfo: NodeInfo,
+  edges: TopologyEdge[],
+  allNodes: Record<string, NodeInfo>,
+): React.ReactNode {
+  const chip = nodeInfo.system_info?.chip ?? '';
+  const modelId = nodeInfo.system_info?.model_id ?? 'Unknown';
+  const os = nodeInfo.os_version
+    ? `macOS ${nodeInfo.os_version}${nodeInfo.os_build_version ? ` (${nodeInfo.os_build_version})` : ''}`
+    : '';
+  const rdma = nodeInfo.rdma_enabled ? 'ON' : 'OFF';
+  const tb = nodeInfo.thunderbolt_bridge ? 'ON' : 'OFF';
+
+  // Group outbound connections by target node
+  const byTarget = new Map<string, string[]>();
+  for (const e of edges) {
+    if (e.source !== nodeId) continue;
+    const targetName = allNodes[e.target]?.friendly_name ?? e.target.slice(-8);
+    const list = byTarget.get(targetName) ?? [];
+
+    if (e.sourceRdmaIface && e.sinkRdmaIface) {
+      list.push(`RDMA ${e.sourceRdmaIface} → ${e.sinkRdmaIface}`);
+    } else if (e.sendBackIp) {
+      const iface =
+        e.sendBackInterface ??
+        allNodes[e.source]?.ip_to_interface?.[e.sendBackIp] ??
+        allNodes[e.target]?.ip_to_interface?.[e.sendBackIp];
+      list.push(`${e.sendBackIp}${iface ? ` ${iface}` : ''}`);
+    }
+    byTarget.set(targetName, list);
+  }
+
+  return (
+    <div style={{ fontSize: 11, lineHeight: 1.6 }}>
+      <div style={{ color: '#FFD700', fontWeight: 600, marginBottom: 4 }}>
+        {modelId}{chip ? ` · ${chip}` : ''}
+      </div>
+      {os && <div style={{ color: '#999' }}>{os}</div>}
+      <div style={{ color: '#999', marginBottom: 6 }}>
+        RDMA: {rdma} · TB: {tb}
+      </div>
+      {byTarget.size > 0 && (
+        <>
+          <div style={{ color: '#888', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Connections
+          </div>
+          {Array.from(byTarget.entries()).map(([target, conns]) => (
+            <div key={target} style={{ marginBottom: 4 }}>
+              <div style={{ color: '#ccc', fontWeight: 500 }}>→ {target}</div>
+              {conns.map((c, i) => (
+                <div key={i} style={{ paddingLeft: 12, color: c.startsWith('RDMA') ? 'rgba(255,215,0,0.9)' : '#aaa' }}>
+                  {c}
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ClusterNode({
   nodeId,
   nodeInfo,
   x,
   y,
   scale = 1,
+  debug = false,
+  edges = [],
+  allNodes = {},
 }: ClusterNodeProps) {
   const model = detectDeviceModel(nodeInfo.system_info?.model_id);
 
@@ -69,6 +131,10 @@ export function ClusterNode({
   const iconLeft = -iconW / 2;
   const iconTop = -iconH / 2;
 
+  // Info icon position: upper-right of the GPU bar
+  const infoX = iconW / 2 + barGap + barW + 4;
+  const infoY = iconTop - 2;
+
   return (
     <g transform={`translate(${x}, ${y}) scale(${scale})`}>
       {/* Name & memory labels — centered on the icon */}
@@ -103,6 +169,17 @@ export function ClusterNode({
           height={barH}
         />
       </g>
+
+      {/* Debug info icon — upper right, uses foreignObject to host HTML tooltip */}
+      {debug && (
+        <foreignObject x={infoX} y={infoY} width={20} height={20} style={{ overflow: 'visible' }}>
+          <InfoTooltip
+            filled
+            placement="right"
+            content={buildDebugContent(nodeId, nodeInfo, edges, allNodes)}
+          />
+        </foreignObject>
+      )}
     </g>
   );
 }
