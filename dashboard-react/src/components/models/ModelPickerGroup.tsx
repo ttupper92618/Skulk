@@ -1,0 +1,369 @@
+import styled, { css, keyframes } from 'styled-components';
+import type {
+  ModelGroup,
+  ModelInfo,
+  ModelFitStatus,
+  DownloadAvailability,
+  InstanceStatus,
+  PickerMode,
+} from '../../types/models';
+import { formatBytes } from '../../utils/format';
+
+export interface ModelPickerGroupProps {
+  group: ModelGroup;
+  isExpanded: boolean;
+  isFavorite: boolean;
+  isHighlighted?: boolean;
+  selectedModelId: string | null;
+  canModelFit: (id: string) => boolean;
+  getModelFitStatus: (id: string) => ModelFitStatus;
+  onToggleExpand: () => void;
+  onSelectModel: (modelId: string) => void;
+  onToggleFavorite: (groupId: string) => void;
+  onShowInfo?: (group: ModelGroup) => void;
+  downloadStatusMap?: Map<string, DownloadAvailability>;
+  launchedAt?: number;
+  instanceStatuses?: Record<string, InstanceStatus>;
+  mode?: PickerMode;
+}
+
+/* ---------- helpers ---------- */
+
+function sizeText(mb?: number): string {
+  if (!mb) return '';
+  return formatBytes(mb * 1024 * 1024);
+}
+
+function fitColor(status: ModelFitStatus): string {
+  if (status === 'fits_now') return 'rgba(255,255,255,0.9)';
+  if (status === 'fits_cluster_capacity') return '#fb923c';
+  return '#f87171';
+}
+
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+const CAPABILITY_ICONS: Record<string, string> = {
+  thinking: '🧠',
+  code: '💻',
+  vision: '👁',
+  image_gen: '🎨',
+  image_edit: '✏️',
+};
+
+function bestInstanceStatus(
+  variants: ModelInfo[],
+  statuses?: Record<string, InstanceStatus>,
+): InstanceStatus | null {
+  if (!statuses) return null;
+  const order = ['ready', 'loading', 'downloading'];
+  let best: InstanceStatus | null = null;
+  let bestRank = Infinity;
+  for (const v of variants) {
+    const s = statuses[v.id];
+    if (!s) continue;
+    const rank = order.indexOf(s.statusClass);
+    if (rank !== -1 && rank < bestRank) {
+      bestRank = rank;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/* ---------- styles ---------- */
+
+const glowAnim = keyframes`
+  0%, 100% { box-shadow: 0 0 4px rgba(34,197,94,0.4); }
+  50%      { box-shadow: 0 0 12px rgba(34,197,94,0.7); }
+`;
+
+const Row = styled.div<{ $disabled: boolean; $highlighted: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: ${({ theme }) => theme.radii.md};
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.surfaceHover};
+  }
+
+  ${({ $disabled }) =>
+    $disabled &&
+    css`
+      opacity: 0.5;
+      pointer-events: none;
+    `}
+
+  ${({ $highlighted }) =>
+    $highlighted &&
+    css`
+      animation: ${glowAnim} 1.5s ease-in-out 3;
+    `}
+`;
+
+const Chevron = styled.span<{ $open: boolean }>`
+  font-size: 10px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  transition: transform 0.15s;
+  width: 14px;
+  text-align: center;
+  ${({ $open }) => $open && css`transform: rotate(90deg);`}
+`;
+
+const Name = styled.span`
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const Caps = styled.span`
+  font-size: 12px;
+  margin-left: 4px;
+`;
+
+const Badge = styled.span<{ $color?: string }>`
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: ${({ theme }) => theme.radii.sm};
+  background: ${({ theme }) => theme.colors.surfaceHover};
+  color: ${({ $color, theme }) => $color ?? theme.colors.textSecondary};
+`;
+
+const StatusDot = styled.span<{ $class: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  ${({ $class }) => {
+    if ($class === 'ready') return css`background: #22c55e;`;
+    if ($class === 'loading') return css`background: #eab308;`;
+    if ($class === 'downloading') return css`background: #3b82f6;`;
+    return css`background: #666;`;
+  }}
+`;
+
+const FavStar = styled.button<{ $active: boolean }>`
+  all: unset;
+  cursor: pointer;
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? '#fbbf24' : '#555')};
+  transition: color 0.15s;
+  &:hover {
+    color: #fbbf24;
+  }
+`;
+
+const InfoBtn = styled.button`
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  &:hover {
+    color: ${({ theme }) => theme.colors.text};
+  }
+`;
+
+const DownloadIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const CheckMark = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const VariantList = styled.div`
+  padding: 4px 0 4px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const VariantRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: ${({ theme }) => theme.radii.sm};
+  cursor: pointer;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  transition: background 0.15s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.surfaceHover};
+  }
+`;
+
+/* ---------- component ---------- */
+
+export function ModelPickerGroup({
+  group,
+  isExpanded,
+  isFavorite,
+  isHighlighted = false,
+  selectedModelId,
+  canModelFit,
+  getModelFitStatus,
+  onToggleExpand,
+  onSelectModel,
+  onToggleFavorite,
+  onShowInfo,
+  downloadStatusMap,
+  launchedAt,
+  instanceStatuses,
+  mode = 'launch',
+}: ModelPickerGroupProps) {
+  const { variants, hasMultipleVariants } = group;
+  const singleVariant = !hasMultipleVariants ? variants[0] : null;
+
+  const anyFits = variants.some((v) => canModelFit(v.id));
+  const anyHasInstance = variants.some((v) => instanceStatuses?.[v.id]);
+  const disabled = !anyFits && !anyHasInstance;
+
+  const groupFit = variants.reduce<ModelFitStatus>((best, v) => {
+    const s = getModelFitStatus(v.id);
+    if (s === 'fits_now') return 'fits_now';
+    if (s === 'fits_cluster_capacity' && best !== 'fits_now') return 'fits_cluster_capacity';
+    return best;
+  }, 'too_large');
+
+  const groupDownload = variants.find((v) => downloadStatusMap?.get(v.id)?.available);
+  const instanceStatus = bestInstanceStatus(variants, instanceStatuses);
+
+  const isSelected = singleVariant ? selectedModelId === singleVariant.id : false;
+
+  const caps = group.capabilities.filter((c) => c in CAPABILITY_ICONS);
+
+  const handleRowClick = () => {
+    if (singleVariant) {
+      onSelectModel(singleVariant.id);
+    } else {
+      onToggleExpand();
+    }
+  };
+
+  // Size display
+  let sizeDisplay: React.ReactNode;
+  if (hasMultipleVariants) {
+    const smallest = sizeText(variants[0].storage_size_megabytes);
+    const largest = sizeText(variants[variants.length - 1].storage_size_megabytes);
+    sizeDisplay = (
+      <Badge>
+        {variants.length} variants{smallest && largest ? ` (${smallest}–${largest})` : ''}
+      </Badge>
+    );
+  } else if (singleVariant?.storage_size_megabytes) {
+    sizeDisplay = (
+      <Badge $color={fitColor(groupFit)}>
+        {sizeText(singleVariant.storage_size_megabytes)}
+      </Badge>
+    );
+  }
+
+  return (
+    <div>
+      <Row $disabled={disabled} $highlighted={isHighlighted} onClick={handleRowClick}>
+        {/* Chevron */}
+        {hasMultipleVariants ? (
+          <Chevron $open={isExpanded}>▶</Chevron>
+        ) : (
+          <span style={{ width: 14 }} />
+        )}
+
+        {/* Name + caps */}
+        <Name>
+          {group.name}
+          {caps.length > 0 && <Caps>{caps.map((c) => CAPABILITY_ICONS[c]).join('')}</Caps>}
+        </Name>
+
+        {/* Size */}
+        {sizeDisplay}
+
+        {/* Time ago */}
+        {launchedAt != null && (
+          <Badge>{timeAgo(launchedAt)}</Badge>
+        )}
+
+        {/* Download indicator */}
+        {groupDownload && <DownloadIcon />}
+
+        {/* Instance status dot */}
+        {instanceStatus && <StatusDot $class={instanceStatus.statusClass} />}
+
+        {/* Selected check */}
+        {isSelected && <CheckMark />}
+
+        {/* Favorite */}
+        <FavStar
+          $active={isFavorite}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(group.id);
+          }}
+          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          {isFavorite ? '★' : '☆'}
+        </FavStar>
+
+        {/* Info */}
+        {onShowInfo && (
+          <InfoBtn
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowInfo(group);
+            }}
+            title="Model info"
+          >
+            ⓘ
+          </InfoBtn>
+        )}
+      </Row>
+
+      {/* Expanded variants */}
+      {isExpanded && hasMultipleVariants && (
+        <VariantList>
+          {variants.map((v) => {
+            const vFit = getModelFitStatus(v.id);
+            const vDownload = downloadStatusMap?.get(v.id);
+            const vInstance = instanceStatuses?.[v.id];
+            const vSelected = selectedModelId === v.id;
+
+            return (
+              <VariantRow key={v.id} onClick={() => onSelectModel(v.id)}>
+                {v.quantization && <Badge>{v.quantization}</Badge>}
+                <span style={{ color: fitColor(vFit), flex: 1 }}>
+                  {sizeText(v.storage_size_megabytes)}
+                </span>
+                {vDownload?.available && <DownloadIcon />}
+                {vInstance && <StatusDot $class={vInstance.statusClass} />}
+                {vSelected && <CheckMark />}
+              </VariantRow>
+            );
+          })}
+        </VariantList>
+      )}
+    </div>
+  );
+}
