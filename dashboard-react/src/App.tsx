@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 import { ThemeProvider } from 'styled-components';
 import { theme, GlobalStyle } from './theme';
@@ -7,6 +8,7 @@ import { TopologyGraph } from './components/topology/TopologyGraph';
 import { ConnectionBanner } from './components/status/ConnectionBanner';
 import { ToastContainer } from './components/status/ToastContainer';
 import { NetworkMesh } from './components/common/NetworkMesh';
+import { SettingsPanel } from './components/layout/SettingsPanel';
 
 const Shell = styled.div`
   position: relative;
@@ -23,6 +25,7 @@ const Main = styled.main`
 
 export function App() {
   const { topology, connected } = useClusterState();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <ThemeProvider theme={theme}>
@@ -34,6 +37,7 @@ export function App() {
           showHome
           showSidebarToggle
           sidebarVisible={false}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <Main>
           {topology ? (
@@ -45,6 +49,7 @@ export function App() {
           )}
         </Main>
         <ToastContainer />
+        <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </Shell>
     </ThemeProvider>
   );
