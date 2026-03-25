@@ -3,6 +3,7 @@ import styled, { css, keyframes } from 'styled-components';
 import { useConfig, type StoreConfig } from '../../hooks/useConfig';
 import { Button } from '../common/Button';
 import { Field } from '../common/Field';
+import { InfoTooltip } from '../common/InfoTooltip';
 import { addToast } from '../../hooks/useToast';
 
 export interface SettingsPanelProps {
@@ -109,6 +110,9 @@ const Row = styled.label`
 `;
 
 const FieldLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
   color: ${({ theme }) => theme.colors.textSecondary};
@@ -248,7 +252,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <Fieldset>
                 <Legend>Model Store</Legend>
                 <Row>
-                  <FieldLabel>Enabled</FieldLabel>
+                  <FieldLabel>
+                    Enabled
+                    <InfoTooltip
+                      filled
+                      content="When enabled, model store allows specification of a single cluster attached storage device where downloaded models will be saved."
+                    />
+                  </FieldLabel>
                   <Toggle $on={draft.enabled} onClick={() => update({ enabled: !draft.enabled })} />
                 </Row>
                 {draft.enabled && (
@@ -298,7 +308,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <Fieldset>
                 <Legend>Download</Legend>
                 <Row>
-                  <FieldLabel>Allow HuggingFace fallback</FieldLabel>
+                  <FieldLabel>
+                    Allow HuggingFace fallback
+                    <InfoTooltip
+                      filled
+                      content="When enabled, nodes can download models directly from HuggingFace if the model is not in the store. Disable for air-gapped clusters where all models must be pre-loaded into the store."
+                    />
+                  </FieldLabel>
                   <Toggle
                     $on={draft.download.allow_hf_fallback}
                     onClick={() => updateDownload({ allow_hf_fallback: !draft.download.allow_hf_fallback })}
@@ -310,7 +326,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <Fieldset>
                 <Legend>Staging</Legend>
                 <Row>
-                  <FieldLabel>Enabled</FieldLabel>
+                  <FieldLabel>
+                    Enabled
+                    <InfoTooltip
+                      filled
+                      content="When enabled, worker nodes copy model files from the store to a local cache directory before loading. This gives MLX a local filesystem path for fast access. Disable only on the store host to load directly from the store path."
+                    />
+                  </FieldLabel>
                   <Toggle
                     $on={draft.staging.enabled}
                     onClick={() => updateStaging({ enabled: !draft.staging.enabled })}
@@ -328,7 +350,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       />
                     </Row>
                     <Row>
-                      <FieldLabel>Cleanup on deactivate</FieldLabel>
+                      <FieldLabel>
+                        Cleanup on deactivate
+                        <InfoTooltip
+                          filled
+                          content="When enabled, on deactivate staged models will be removed from cluster nodes to prevent storage bloat on cluster nodes."
+                        />
+                      </FieldLabel>
                       <Toggle
                         $on={draft.staging.cleanup_on_deactivate}
                         onClick={() => updateStaging({ cleanup_on_deactivate: !draft.staging.cleanup_on_deactivate })}
