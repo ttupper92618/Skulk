@@ -39,7 +39,15 @@ function buildDebugContent(
     const list = byTarget.get(targetName) ?? [];
 
     if (e.sourceRdmaIface && e.sinkRdmaIface) {
-      list.push(`RDMA ${e.sourceRdmaIface} → ${e.sinkRdmaIface}`);
+      // These are Thunderbolt interfaces that macOS labels as rdma_en*
+      // Actual RDMA requires TB5 + rdma_ctl enabled
+      const srcRdma = allNodes[e.source]?.rdma_enabled;
+      const sinkRdma = allNodes[e.target]?.rdma_enabled;
+      const isRealRdma = srcRdma && sinkRdma;
+      const label = isRealRdma
+        ? `RDMA ${e.sourceRdmaIface} → ${e.sinkRdmaIface}`
+        : `TB ${e.sourceRdmaIface} → ${e.sinkRdmaIface}`;
+      list.push(label);
     } else if (e.sendBackIp) {
       const iface =
         e.sendBackInterface ??
@@ -65,7 +73,7 @@ function buildDebugContent(
             <div key={target} style={{ marginBottom: 4 }}>
               <div style={{ color: '#ccc', fontWeight: 500 }}>→ {target}</div>
               {conns.map((c, i) => (
-                <div key={i} style={{ paddingLeft: 12, color: c.startsWith('RDMA') ? 'rgba(255,215,0,0.9)' : '#aaa' }}>
+                <div key={i} style={{ paddingLeft: 12, color: c.startsWith('RDMA') ? 'rgba(255,215,0,0.9)' : c.startsWith('TB ') ? 'rgba(96,165,250,0.9)' : '#aaa' }}>
                   {c}
                 </div>
               ))}
