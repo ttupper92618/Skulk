@@ -31,9 +31,6 @@ function buildDebugContent(
   const os = nodeInfo.os_version
     ? `macOS ${nodeInfo.os_version}${nodeInfo.os_build_version ? ` (${nodeInfo.os_build_version})` : ''}`
     : '';
-  const rdma = nodeInfo.rdma_enabled ? 'ON' : 'OFF';
-  const tb = nodeInfo.thunderbolt_bridge ? 'ON' : 'OFF';
-
   // Group outbound connections by target node
   const byTarget = new Map<string, string[]>();
   for (const e of edges) {
@@ -58,10 +55,7 @@ function buildDebugContent(
       <div style={{ color: '#FFD700', fontWeight: 600, marginBottom: 4 }}>
         {modelId}{chip ? ` · ${chip}` : ''}
       </div>
-      {os && <div style={{ color: '#999' }}>{os}</div>}
-      <div style={{ color: '#999', marginBottom: 6 }}>
-        RDMA: {rdma} · TB: {tb}
-      </div>
+      {os && <div style={{ color: '#999', marginBottom: 6 }}>{os}</div>}
       {byTarget.size > 0 && (
         <>
           <div style={{ color: '#888', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
