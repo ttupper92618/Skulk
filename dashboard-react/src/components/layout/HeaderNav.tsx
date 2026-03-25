@@ -14,6 +14,7 @@ export interface HeaderNavProps {
   mobileRightOpen?: boolean;
   onToggleMobileRight?: () => void;
   downloadProgress?: { count: number; percentage: number } | null;
+  onOpenSettings?: () => void;
   className?: string;
 }
 
@@ -183,6 +184,7 @@ export function HeaderNav({
   mobileRightOpen = false,
   onToggleMobileRight,
   downloadProgress = null,
+  onOpenSettings,
   className,
 }: HeaderNavProps) {
   return (
@@ -210,9 +212,9 @@ export function HeaderNav({
           <DownloadIcon /> Downloads
         </NavLink>
 
-        <NavLink href="/#/settings">
-          <SettingsIcon /> Settings
-        </NavLink>
+        <Button variant="ghost" size="lg" icon onClick={onOpenSettings} aria-label="Settings">
+          <SettingsIcon />
+        </Button>
 
         {showMobileRightToggle && (
           <ToggleBtn variant="outline" size="lg" icon $active={mobileRightOpen} onClick={onToggleMobileRight} aria-label="Toggle right panel" aria-pressed={mobileRightOpen}>
