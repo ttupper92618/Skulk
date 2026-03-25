@@ -22,6 +22,11 @@ export interface HeaderNavProps {
 const Nav = styled.header`
   z-index: 20;
   background: ${({ theme }) => theme.colors.surface};
+  border-bottom: none;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03));
+  background-size: 100% 1px;
+  background-position: bottom;
+  background-repeat: no-repeat;
   padding: 16px 24px 12px;
   display: flex;
   align-items: center;
@@ -194,7 +199,7 @@ export function HeaderNav({
           </ToggleBtn>
         )}
         <LogoBtn $disabled={!showHome} onClick={showHome ? onHome : undefined}>
-          <LogoText>EXOCluster</LogoText>
+          <LogoText>FoxmemEX0</LogoText>
         </LogoBtn>
       </LeftGroup>
 

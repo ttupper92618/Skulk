@@ -107,7 +107,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
     return (
       <svg
         ref={svgRef}
-        style={{ width: '100%', height: '100%', background: '#111' }}
+        style={{ width: '100%', height: '100%', background: 'transparent' }}
       />
     );
   }
@@ -115,7 +115,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
   return (
     <svg
       ref={svgRef}
-      style={{ width: '100%', height: '100%', background: '#111' }}
+      style={{ width: '100%', height: '100%', background: 'transparent' }}
     >
       <defs>
         <marker

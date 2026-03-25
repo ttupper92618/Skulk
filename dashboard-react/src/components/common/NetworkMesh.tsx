@@ -102,15 +102,19 @@ export function NetworkMesh({
 
       // Draw connections
       const linkDist2 = linkDistance * linkDistance;
-      ctx!.beginPath();
+      // Extract base alpha from lineColor (e.g. "rgba(255,215,0,0.08)" → 0.08)
+      const baseAlphaMatch = lineColor.match(/([\d.]+)\)$/);
+      const baseAlpha = baseAlphaMatch ? parseFloat(baseAlphaMatch[1]) : 0.08;
+      const lineBase = lineColor.replace(/[\d.]+\)$/, '');
+
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const d2 = dx * dx + dy * dy;
           if (d2 < linkDist2) {
-            const alpha = 1 - Math.sqrt(d2) / linkDistance;
-            ctx!.strokeStyle = lineColor.replace(/[\d.]+\)$/, `${alpha * 0.06})`);
+            const fade = 1 - Math.sqrt(d2) / linkDistance;
+            ctx!.strokeStyle = `${lineBase}${(fade * baseAlpha).toFixed(4)})`;
             ctx!.beginPath();
             ctx!.moveTo(particles[i].x, particles[i].y);
             ctx!.lineTo(particles[j].x, particles[j].y);

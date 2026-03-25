@@ -27,7 +27,7 @@ export function App() {
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyle />
-      <NetworkMesh />
+      <NetworkMesh radius={2.5} lineColor="rgba(255,215,0,0.35)" />
       <Shell>
         <ConnectionBanner connected={connected} />
         <HeaderNav
