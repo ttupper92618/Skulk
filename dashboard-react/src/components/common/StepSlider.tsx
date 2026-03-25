@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import styled from 'styled-components';
 
 export interface StepSliderOption<T extends string | number = number> {
@@ -16,78 +15,66 @@ export interface StepSliderProps<T extends string | number = number> {
 /* ---- styles ---- */
 
 const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  position: relative;
   user-select: none;
 `;
 
-const Track = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-  height: 24px;
-`;
-
-const TrackLine = styled.div`
+/** The grey background track line, inset so it starts/ends at dot centers. */
+const TrackLine = styled.div<{ $inset: number }>`
   position: absolute;
-  left: 0;
-  right: 0;
+  top: 12px;
+  left: ${({ $inset }) => $inset}px;
+  right: ${({ $inset }) => $inset}px;
   height: 2px;
   background: rgba(80, 80, 80, 0.6);
   border-radius: 1px;
 `;
 
-const ActiveLine = styled.div<{ $pct: number }>`
+/** The gold active portion of the track. */
+const ActiveLine = styled.div<{ $inset: number; $pct: number }>`
   position: absolute;
-  left: 0;
+  top: 12px;
+  left: ${({ $inset }) => $inset}px;
   height: 2px;
-  width: ${({ $pct }) => $pct}%;
+  width: calc((100% - ${({ $inset }) => $inset * 2}px) * ${({ $pct }) => $pct / 100});
   background: #FFD700;
   border-radius: 1px;
   transition: width 0.15s ease-out;
 `;
 
-const StepRow = styled.div`
+/** Flex row holding all step columns. */
+const Steps = styled.div`
   position: relative;
   display: flex;
   justify-content: space-between;
-  height: 24px;
 `;
 
-const StepHit = styled.button<{ $active: boolean }>`
+/** A single step: dot on top, label below, both centered. */
+const StepCol = styled.button`
   all: unset;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
+  gap: 4px;
   z-index: 1;
 `;
 
 const Dot = styled.span<{ $active: boolean }>`
   width: ${({ $active }) => ($active ? '18px' : '14px')};
   height: ${({ $active }) => ($active ? '18px' : '14px')};
+  margin: ${({ $active }) => ($active ? '3px 0' : '5px 0')};
   border-radius: 50%;
   background: ${({ $active }) => ($active ? '#FFD700' : 'rgba(120, 120, 120, 0.7)')};
   transition: all 0.15s ease-out;
   box-shadow: ${({ $active }) => ($active ? '0 0 8px rgba(255, 215, 0, 0.4)' : 'none')};
 
-  ${StepHit}:hover & {
+  ${StepCol}:hover & {
     background: ${({ $active }) => ($active ? '#FFD700' : 'rgba(160, 160, 160, 0.8)')};
   }
 `;
 
-const Labels = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-`;
-
 const Label = styled.span<{ $active: boolean }>`
-  width: 24px;
-  text-align: center;
   font-size: 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
   color: ${({ $active }) => ($active ? '#FFD700' : 'rgba(179, 179, 179, 0.6)')};
@@ -114,31 +101,26 @@ export function StepSlider<T extends string | number = number>({
   const activeIndex = options.findIndex((o) => o.value === value);
   const pct = options.length <= 1 ? 0 : (activeIndex / (options.length - 1)) * 100;
 
+  // Inset the track lines so they start/end at the center of the first/last dot.
+  // Each dot hit area is roughly 18px wide; half = 9.
+  const trackInset = 9;
+
   return (
     <Container className={className}>
-      <Track>
-        <TrackLine />
-        <ActiveLine $pct={pct} />
-        <StepRow>
-          {options.map((opt, i) => (
-            <StepHit
-              key={String(opt.value)}
-              $active={i === activeIndex}
-              onClick={() => onChange(opt.value)}
-              aria-label={opt.label}
-            >
-              <Dot $active={i === activeIndex} />
-            </StepHit>
-          ))}
-        </StepRow>
-      </Track>
-      <Labels>
+      <TrackLine $inset={trackInset} />
+      <ActiveLine $inset={trackInset} $pct={pct} />
+      <Steps>
         {options.map((opt, i) => (
-          <Label key={String(opt.value)} $active={i === activeIndex}>
-            {opt.label}
-          </Label>
+          <StepCol
+            key={String(opt.value)}
+            onClick={() => onChange(opt.value)}
+            aria-label={opt.label}
+          >
+            <Dot $active={i === activeIndex} />
+            <Label $active={i === activeIndex}>{opt.label}</Label>
+          </StepCol>
         ))}
-      </Labels>
+      </Steps>
     </Container>
   );
 }
