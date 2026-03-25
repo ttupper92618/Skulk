@@ -46,9 +46,9 @@ export function NodeLabel({
       {debugContent && (
         <foreignObject
           x={cx + nameWidth / 2 + 4}
-          y={nameY - 9}
-          width={18}
-          height={18}
+          y={nameY - 12}
+          width={20}
+          height={20}
           style={{ overflow: 'visible' }}
         >
           <InfoTooltip
