@@ -25,9 +25,9 @@ const Container = styled.div`
   user-select: none;
 `;
 
-const TrackLine = styled.div<{ $inset: number; $height: number }>`
+const TrackLine = styled.div<{ $inset: number; $height: number; $dotCenter: number }>`
   position: absolute;
-  top: 12px;
+  top: ${({ $dotCenter }) => $dotCenter}px;
   left: ${({ $inset }) => $inset}px;
   right: ${({ $inset }) => $inset}px;
   height: ${({ $height }) => $height}px;
@@ -36,9 +36,9 @@ const TrackLine = styled.div<{ $inset: number; $height: number }>`
   border-radius: ${({ $height }) => $height / 2}px;
 `;
 
-const ActiveLine = styled.div<{ $inset: number; $pct: number; $height: number }>`
+const ActiveLine = styled.div<{ $inset: number; $pct: number; $height: number; $dotCenter: number }>`
   position: absolute;
-  top: 12px;
+  top: ${({ $dotCenter }) => $dotCenter}px;
   left: ${({ $inset }) => $inset}px;
   height: ${({ $height }) => $height}px;
   margin-top: ${({ $height }) => -$height / 2}px;
@@ -115,11 +115,12 @@ export function StepSlider<T extends string | number = number>({
 
   // Inset track lines to start/end at dot centers.
   const trackInset = dotSize / 2;
+  const dotCenter = dotSize / 2;
 
   return (
     <Container className={className}>
-      <TrackLine $inset={trackInset} $height={trackWidth} />
-      <ActiveLine $inset={trackInset} $pct={pct} $height={trackWidth} />
+      <TrackLine $inset={trackInset} $height={trackWidth} $dotCenter={dotCenter} />
+      <ActiveLine $inset={trackInset} $pct={pct} $height={trackWidth} $dotCenter={dotCenter} />
       <Steps>
         {options.map((opt, i) => (
           <StepCol
