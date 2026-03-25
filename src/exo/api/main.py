@@ -83,6 +83,8 @@ from exo.api.types import (
     PlaceInstanceParams,
     PlacementPreview,
     PlacementPreviewResponse,
+    PurgeStagingRequest,
+    PurgeStagingResponse,
     StartDownloadParams,
     StartDownloadResponse,
     ToolCall,
@@ -371,8 +373,13 @@ class API:
         self.app.get("/store/registry")(self.get_store_registry)
         self.app.get("/store/downloads")(self.get_store_downloads)
         self.app.delete("/store/models/{model_id:path}")(self.delete_store_model)
-        self.app.post("/store/models/{model_id:path}/download")(self.request_store_download)
-        self.app.get("/store/models/{model_id:path}/download/status")(self.get_store_download_status)
+        self.app.post("/store/models/{model_id:path}/download")(
+            self.request_store_download
+        )
+        self.app.get("/store/models/{model_id:path}/download/status")(
+            self.get_store_download_status
+        )
+        self.app.post("/store/purge-staging")(self.purge_staging_caches)
         self.app.get("/filesystem/browse")(self.browse_filesystem)
         self.app.get("/node/identity")(self.get_node_identity)
 
@@ -1786,6 +1793,21 @@ class API:
         await self._send_download(command)
         return DeleteDownloadResponse(command_id=command.command_id)
 
+    async def purge_staging_caches(
+        self, payload: PurgeStagingRequest
+    ) -> PurgeStagingResponse:
+        from exo.shared.types.commands import PurgeStagingCache
+
+        command = PurgeStagingCache(
+            model_id=ModelId(payload.model_id) if payload.model_id else None,
+        )
+        await self._send_download(command)
+        model_suffix = f" for model {payload.model_id}" if payload.model_id else ""
+        return PurgeStagingResponse(
+            command_id=command.command_id,
+            message=f"Purge staging command broadcast to all nodes{model_suffix}",
+        )
+
     @staticmethod
     def _get_trace_path(task_id: str) -> Path:
         trace_path = EXO_TRACING_CACHE_DIR / f"trace_{task_id}.json"
@@ -1916,34 +1938,48 @@ class API:
 
     async def get_config(self) -> JSONResponse:
         if not self._config_path.exists():
-            return JSONResponse({"config": {}, "configPath": str(self._config_path), "fileExists": False})
+            return JSONResponse(
+                {
+                    "config": {},
+                    "configPath": str(self._config_path),
+                    "fileExists": False,
+                }
+            )
         with self._config_path.open() as f:
             raw = yaml.safe_load(f)
         if raw is None:
             raw = {}
-        return JSONResponse({"config": raw, "configPath": str(self._config_path), "fileExists": True})
+        return JSONResponse(
+            {"config": raw, "configPath": str(self._config_path), "fileExists": True}
+        )
 
     async def update_config(self, request: Request) -> JSONResponse:
         body = await request.json()
         config_data = body.get("config", body)
         # Validate by attempting to parse with Pydantic
         from exo.store.config import ExoConfig
+
         try:
             ExoConfig.model_validate(config_data)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc))
-        config_yaml = yaml.safe_dump(config_data, default_flow_style=False, sort_keys=False)
+        config_yaml = yaml.safe_dump(
+            config_data, default_flow_style=False, sort_keys=False
+        )
         # Write locally
         with self._config_path.open("w") as f:
             f.write(config_yaml)
         # Broadcast to all nodes via the download commands topic (gossipsub)
         from exo.shared.types.commands import SyncConfig
+
         await self._send_download(SyncConfig(config_yaml=config_yaml))
-        return JSONResponse({
-            "success": True,
-            "message": "Config saved and synced to cluster. Restart exo for changes to take effect.",
-            "requiresRestart": True,
-        })
+        return JSONResponse(
+            {
+                "success": True,
+                "message": "Config saved and synced to cluster. Restart exo for changes to take effect.",
+                "requiresRestart": True,
+            }
+        )
 
     async def get_store_health(self) -> JSONResponse:
         if self._store_client is None:
@@ -1951,12 +1987,14 @@ class API:
         health = await self._store_client.health_check()
         if health is None:
             raise HTTPException(status_code=503, detail="Store unreachable")
-        return JSONResponse({
-            "storePath": health.store_path,
-            "freeBytes": health.free_bytes,
-            "totalBytes": health.total_bytes,
-            "usedBytes": health.used_bytes,
-        })
+        return JSONResponse(
+            {
+                "storePath": health.store_path,
+                "freeBytes": health.free_bytes,
+                "totalBytes": health.total_bytes,
+                "usedBytes": health.used_bytes,
+            }
+        )
 
     async def get_store_registry(self) -> JSONResponse:
         if self._store_client is None:
@@ -1968,7 +2006,9 @@ class API:
 
     async def browse_filesystem(self, path: str = "/Volumes") -> JSONResponse:
         resolved = Path(path).resolve()
-        if not any(resolved.is_relative_to(root) for root in self._ALLOWED_BROWSE_ROOTS):
+        if not any(
+            resolved.is_relative_to(root) for root in self._ALLOWED_BROWSE_ROOTS
+        ):
             raise HTTPException(status_code=400, detail="Path outside allowed roots")
         if not resolved.is_dir():
             raise HTTPException(status_code=400, detail="Path is not a directory")
@@ -2001,11 +2041,13 @@ class API:
                 ):
                     ip = addr
                     break
-        return JSONResponse({
-            "nodeId": str(self.node_id),
-            "hostname": hostname,
-            "ipAddress": ip,
-        })
+        return JSONResponse(
+            {
+                "nodeId": str(self.node_id),
+                "hostname": hostname,
+                "ipAddress": ip,
+            }
+        )
 
     async def get_store_downloads(self) -> JSONResponse:
         if self._store_client is None:
@@ -2030,5 +2072,7 @@ class API:
             raise HTTPException(status_code=503, detail="Store not configured")
         deleted = await self._store_client.delete_store_model(model_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Model {model_id} not in store")
+            raise HTTPException(
+                status_code=404, detail=f"Model {model_id} not in store"
+            )
         return JSONResponse({"modelId": model_id, "deleted": True})

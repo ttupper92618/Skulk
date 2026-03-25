@@ -79,7 +79,11 @@ class Node:
         store_client: ModelStoreClient | None = None
         store_server: ModelStoreServer | None = None
 
-        if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled:
+        if (
+            exo_config is not None
+            and exo_config.model_store is not None
+            and exo_config.model_store.enabled
+        ):
             ms = exo_config.model_store
             local_hostname = socket.gethostname()
             is_store_host = ms.store_host in (str(node_id), local_hostname)
@@ -87,7 +91,9 @@ class Node:
             # Store host gets a local path so the client uses shutil instead of HTTP.
             # Use store_http_host (when set) as the HTTP hostname so that a PeerId
             # in store_host does not get used as a DNS name by worker nodes.
-            local_store_path: Path | None = Path(ms.store_path) if is_store_host else None
+            local_store_path: Path | None = (
+                Path(ms.store_path) if is_store_host else None
+            )
             store_client = ModelStoreClient(
                 store_host=ms.store_http_host or ms.store_host,
                 store_port=ms.store_port,
@@ -115,13 +121,21 @@ class Node:
             os.environ["EXO_MODELS_PATH"] = ":".join(paths)
             # Also update the in-process constants for the main process
             from exo.shared.constants import add_model_search_path
+
             add_model_search_path(Path(staging_cfg.node_cache_path))
-            logger.info(f"ModelStore: added staging path {staging_path} to EXO_MODELS_PATH")
+            logger.info(
+                f"ModelStore: added staging path {staging_path} to EXO_MODELS_PATH"
+            )
 
         # Create DownloadCoordinator (unless --no-downloads)
         if not args.no_downloads:
             base_downloader = exo_shard_downloader(offline=args.offline)
-            if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled and store_client is not None:
+            if (
+                exo_config is not None
+                and exo_config.model_store is not None
+                and exo_config.model_store.enabled
+                and store_client is not None
+            ):
                 ms = exo_config.model_store
                 staging_cfg = resolve_node_staging(ms, str(node_id))
                 shard_downloader = ModelStoreDownloader(
@@ -133,12 +147,24 @@ class Node:
             else:
                 shard_downloader = base_downloader
 
+            coordinator_staging_path = (
+                Path(
+                    resolve_node_staging(
+                        exo_config.model_store, str(node_id)
+                    ).node_cache_path
+                )
+                if exo_config is not None
+                and exo_config.model_store is not None
+                and exo_config.model_store.enabled
+                else None
+            )
             download_coordinator = DownloadCoordinator(
                 node_id,
                 shard_downloader,
                 event_sender=event_router.sender(),
                 download_command_receiver=router.receiver(topics.DOWNLOAD_COMMANDS),
                 offline=args.offline,
+                staging_cache_path=coordinator_staging_path,
             )
         else:
             download_coordinator = None
@@ -159,7 +185,11 @@ class Node:
 
         if not args.no_worker:
             worker_store_client: ModelStoreClient | None = store_client
-            if exo_config is not None and exo_config.model_store is not None and exo_config.model_store.enabled:
+            if (
+                exo_config is not None
+                and exo_config.model_store is not None
+                and exo_config.model_store.enabled
+            ):
                 worker_staging_cfg = resolve_node_staging(
                     exo_config.model_store, str(node_id)
                 )
@@ -310,8 +340,16 @@ class Node:
                     if self.download_coordinator:
                         self.download_coordinator.shutdown()
                         base_dl = exo_shard_downloader(offline=self.offline)
-                        ms = self.exo_config.model_store if self.exo_config is not None else None
-                        if ms is not None and ms.enabled and self.store_client is not None:
+                        ms = (
+                            self.exo_config.model_store
+                            if self.exo_config is not None
+                            else None
+                        )
+                        if (
+                            ms is not None
+                            and ms.enabled
+                            and self.store_client is not None
+                        ):
                             elect_staging = resolve_node_staging(ms, str(self.node_id))
                             elect_downloader = ModelStoreDownloader(
                                 inner=base_dl,
@@ -321,6 +359,15 @@ class Node:
                             )
                         else:
                             elect_downloader = base_dl
+                        elect_staging_path = (
+                            Path(
+                                resolve_node_staging(
+                                    ms, str(self.node_id)
+                                ).node_cache_path
+                            )
+                            if ms is not None and ms.enabled
+                            else None
+                        )
                         self.download_coordinator = DownloadCoordinator(
                             self.node_id,
                             elect_downloader,
@@ -329,11 +376,16 @@ class Node:
                                 topics.DOWNLOAD_COMMANDS
                             ),
                             offline=self.offline,
+                            staging_cache_path=elect_staging_path,
                         )
                         self._tg.start_soon(self.download_coordinator.run)
                     if self.worker:
                         self.worker.shutdown()
-                        ms2 = self.exo_config.model_store if self.exo_config is not None else None
+                        ms2 = (
+                            self.exo_config.model_store
+                            if self.exo_config is not None
+                            else None
+                        )
                         elect_staging2 = (
                             resolve_node_staging(ms2, str(self.node_id))
                             if ms2 is not None and ms2.enabled
