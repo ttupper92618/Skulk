@@ -3496,3 +3496,19 @@ export const deleteStoreModel = async (modelId: string): Promise<boolean> => {
   });
   return resp.ok;
 };
+
+export const purgeStagingCaches = async (
+  modelId?: string,
+): Promise<{ commandId: string; message: string } | null> => {
+  try {
+    const resp = await fetch("/store/purge-staging", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelId: modelId ?? null }),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+};

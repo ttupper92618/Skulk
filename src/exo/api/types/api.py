@@ -422,6 +422,15 @@ class DeleteDownloadResponse(CamelCaseModel):
     command_id: CommandId
 
 
+class PurgeStagingRequest(CamelCaseModel):
+    model_id: str | None = None
+
+
+class PurgeStagingResponse(CamelCaseModel):
+    command_id: CommandId
+    message: str
+
+
 class TraceEventResponse(CamelCaseModel):
     name: str
     start_us: int

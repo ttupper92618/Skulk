@@ -15,6 +15,7 @@
     fetchStoreDownloads,
     deleteStoreModel,
     requestStoreDownload,
+    purgeStagingCaches,
     instances,
     type StoreRegistryEntry,
     type StoreDownloadProgress,
@@ -365,6 +366,8 @@
   let downloadPollInterval: ReturnType<typeof setInterval> | null = null;
   let deleteConfirmEntry = $state<{ entry: StoreRegistryEntry; isActive: boolean } | null>(null);
   let deleting = $state(false);
+  let purgeConfirm = $state(false);
+  let purging = $state(false);
 
   // Model picker for "Find Models" — download to store
   let isModelPickerOpen = $state(false);
@@ -493,6 +496,16 @@
     }
   }
 
+  async function confirmPurge() {
+    purging = true;
+    try {
+      await purgeStagingCaches();
+    } finally {
+      purging = false;
+      purgeConfirm = false;
+    }
+  }
+
   onDestroy(() => {
     if (downloadPollInterval) {
       clearInterval(downloadPollInterval);
@@ -571,20 +584,33 @@
     {#if activeTab === "store" && storeAvailable}
       <div class="flex items-center justify-between">
         <div></div>
-        <button
-          type="button"
-          class="px-4 py-1.5 text-xs font-mono uppercase tracking-wider bg-exo-yellow text-exo-black rounded hover:bg-exo-yellow/90 transition-colors flex items-center gap-2"
-          onclick={() => {
-            fetchPickerModels();
-            isModelPickerOpen = true;
-          }}
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          Find Models
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="px-4 py-1.5 text-xs font-mono uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/30 rounded hover:bg-red-500/30 transition-colors flex items-center gap-2"
+            onclick={() => (purgeConfirm = true)}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            Purge All Node Caches
+          </button>
+          <button
+            type="button"
+            class="px-4 py-1.5 text-xs font-mono uppercase tracking-wider bg-exo-yellow text-exo-black rounded hover:bg-exo-yellow/90 transition-colors flex items-center gap-2"
+            onclick={() => {
+              fetchPickerModels();
+              isModelPickerOpen = true;
+            }}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            Find Models
+          </button>
+        </div>
       </div>
       <StoreRegistryTable
         entries={registryEntries}
@@ -1099,6 +1125,51 @@
       >
         {deleting ? "Deleting..." : "Delete"}
       </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Purge staging confirmation modal -->
+{#if purgeConfirm}
+  <div
+    class="fixed inset-0 z-[60] bg-black/60"
+    transition:fade={{ duration: 150 }}
+    onclick={() => (purgeConfirm = false)}
+    role="presentation"
+  ></div>
+  <div
+    class="fixed inset-0 z-[61] flex items-center justify-center pointer-events-none"
+  >
+    <div
+      class="bg-exo-dark-gray border border-exo-medium-gray/40 rounded-lg p-6 w-[420px] pointer-events-auto"
+      transition:fly={{ y: 20, duration: 200, easing: cubicOut }}
+    >
+      <h3 class="text-sm font-mono uppercase tracking-wider text-red-400 mb-3">
+        Purge all node caches
+      </h3>
+      <p class="text-sm text-exo-light-gray mb-4 font-mono">
+        This will remove all staged model files from every node in the cluster. Models will need to be re-staged from the store before they can run again.
+      </p>
+      <p class="text-xs text-white/40 mb-4 font-mono">
+        Nodes that are currently offline will not receive this command.
+      </p>
+      <div class="flex justify-end gap-3">
+        <button
+          type="button"
+          class="px-4 py-1.5 text-xs font-mono uppercase tracking-wider text-white/70 hover:text-white border border-exo-medium-gray/40 rounded transition-colors"
+          onclick={() => (purgeConfirm = false)}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={purging}
+          class="px-4 py-1.5 text-xs font-mono uppercase tracking-wider bg-red-500/80 text-white rounded hover:bg-red-500 disabled:opacity-50 transition-colors"
+          onclick={confirmPurge}
+        >
+          {purging ? "Purging..." : "Purge All"}
+        </button>
+      </div>
     </div>
   </div>
 {/if}

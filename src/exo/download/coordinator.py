@@ -20,6 +20,7 @@ from exo.shared.types.commands import (
     CancelDownload,
     DeleteDownload,
     ForwarderDownloadCommand,
+    PurgeStagingCache,
     StartDownload,
     SyncConfig,
 )
@@ -47,6 +48,7 @@ class DownloadCoordinator:
     download_command_receiver: Receiver[ForwarderDownloadCommand]
     event_sender: Sender[Event]
     offline: bool = False
+    staging_cache_path: Path | None = None
 
     # Local state
     download_status: dict[ModelId, DownloadProgress] = field(default_factory=dict)
@@ -114,11 +116,16 @@ class DownloadCoordinator:
     async def _command_processor(self) -> None:
         with self.download_command_receiver as commands:
             async for cmd in commands:
-                # SyncConfig is cluster-wide — every node handles it
+                # Cluster-wide commands — every node handles these
                 match cmd.command:
                     case SyncConfig(config_yaml=config_yaml):
                         await self._sync_config(config_yaml)
                         continue
+                    case PurgeStagingCache(model_id=purge_model_id):
+                        await self._purge_staging_cache(purge_model_id)
+                        continue
+                    case _:
+                        pass  # Targeted commands handled below
 
                 # Only process targeted commands for this node
                 if cmd.command.target_node_id != self.node_id:
@@ -152,9 +159,80 @@ class DownloadCoordinator:
         config_path = Path("exo.yaml")
         try:
             config_path.write_text(config_yaml)
-            logger.info(f"DownloadCoordinator: synced exo.yaml from cluster ({len(config_yaml)} bytes)")
+            logger.info(
+                f"DownloadCoordinator: synced exo.yaml from cluster ({len(config_yaml)} bytes)"
+            )
         except Exception as exc:
             logger.warning(f"DownloadCoordinator: failed to sync exo.yaml: {exc}")
+
+    async def _purge_staging_cache(self, model_id: ModelId | None) -> None:
+        """Remove staged model files from the local node cache."""
+        if self.staging_cache_path is None:
+            logger.warning(
+                "PurgeStagingCache: no staging_cache_path configured, skipping"
+            )
+            return
+
+        cache_path = self.staging_cache_path.expanduser()
+        if not cache_path.exists():
+            logger.info(
+                f"PurgeStagingCache: staging path {cache_path} does not exist, nothing to purge"
+            )
+            return
+
+        if model_id is not None:
+            # Purge a specific model
+            sanitized = str(model_id).replace("/", "--")
+            model_dir = cache_path / sanitized
+            if model_dir.exists():
+                # Cancel active download if any
+                if model_id in self.active_downloads:
+                    self.active_downloads[model_id].cancel()
+                logger.info(f"PurgeStagingCache: removing {model_dir}")
+                await asyncio.to_thread(shutil.rmtree, model_dir, True)
+                if model_id in self.download_status:
+                    current = self.download_status[model_id]
+                    pending = DownloadPending(
+                        shard_metadata=current.shard_metadata,
+                        node_id=self.node_id,
+                        model_directory=self._model_dir(model_id),
+                    )
+                    await self.event_sender.send(
+                        NodeDownloadProgress(download_progress=pending)
+                    )
+                    del self.download_status[model_id]
+            else:
+                logger.info(f"PurgeStagingCache: model {model_id} not found in staging")
+        else:
+            # Purge all staged models
+            # Cancel all active downloads first
+            for _mid, scope in list(self.active_downloads.items()):
+                scope.cancel()
+
+            purged = 0
+            for entry in cache_path.iterdir():
+                if entry.is_dir():
+                    logger.info(f"PurgeStagingCache: removing {entry}")
+                    await asyncio.to_thread(shutil.rmtree, entry, True)
+                    purged += 1
+
+            # Reset all download statuses
+            for mid, status in list(self.download_status.items()):
+                if isinstance(status, DownloadCompleted) and status.read_only:
+                    continue  # Don't reset EXO_MODELS_PATH entries
+                pending = DownloadPending(
+                    shard_metadata=status.shard_metadata,
+                    node_id=self.node_id,
+                    model_directory=self._model_dir(mid),
+                )
+                await self.event_sender.send(
+                    NodeDownloadProgress(download_progress=pending)
+                )
+                del self.download_status[mid]
+
+            logger.info(
+                f"PurgeStagingCache: purged {purged} model directories from {cache_path}"
+            )
 
     async def _start_download(self, shard: ShardMetadata) -> None:
         model_id = shard.model_card.model_id
