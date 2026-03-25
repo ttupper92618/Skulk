@@ -302,7 +302,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
           const lineHeight = 16;
 
           // Compute cluster bounding box from node positions + margin
-          const margin = 120;
+          const margin = 220;
           const xs = positions.map(p => p.x);
           const ys = positions.map(p => p.y);
           const clusterLeft = Math.min(...xs) - margin;
@@ -367,9 +367,9 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
 
           return (
             <g>
-              {/* Top Left — text grows left and upward from box corner */}
+              {/* Top Left */}
               {quadrants.topLeft.map((line, i) => (
-                <text key={`tl-${i}`} x={clusterLeft} y={clusterTop - i * lineHeight} textAnchor="end" dominantBaseline="auto"
+                <text key={`tl-${i}`} x={clusterLeft} y={clusterTop + i * lineHeight} textAnchor="start" dominantBaseline="hanging"
                   fontSize={fontSize} fontFamily="SF Mono, Monaco, monospace"
                   fill={line.isRdma ? 'rgba(255,215,0,0.9)' : 'rgba(255,255,255,0.85)'}>
                   {line.arrow} {line.label}
@@ -377,7 +377,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
               ))}
               {/* Top Right */}
               {quadrants.topRight.map((line, i) => (
-                <text key={`tr-${i}`} x={clusterRight} y={clusterTop - i * lineHeight} textAnchor="start" dominantBaseline="auto"
+                <text key={`tr-${i}`} x={clusterRight} y={clusterTop + i * lineHeight} textAnchor="end" dominantBaseline="hanging"
                   fontSize={fontSize} fontFamily="SF Mono, Monaco, monospace"
                   fill={line.isRdma ? 'rgba(255,215,0,0.9)' : 'rgba(255,255,255,0.85)'}>
                   {line.arrow} {line.label}
@@ -385,7 +385,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
               ))}
               {/* Bottom Left */}
               {quadrants.bottomLeft.map((line, i) => (
-                <text key={`bl-${i}`} x={clusterLeft} y={clusterBottom + i * lineHeight} textAnchor="end" dominantBaseline="hanging"
+                <text key={`bl-${i}`} x={clusterLeft} y={clusterBottom - (quadrants.bottomLeft.length - 1 - i) * lineHeight} textAnchor="start" dominantBaseline="auto"
                   fontSize={fontSize} fontFamily="SF Mono, Monaco, monospace"
                   fill={line.isRdma ? 'rgba(255,215,0,0.9)' : 'rgba(255,255,255,0.85)'}>
                   {line.arrow} {line.label}
@@ -393,7 +393,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
               ))}
               {/* Bottom Right */}
               {quadrants.bottomRight.map((line, i) => (
-                <text key={`br-${i}`} x={clusterRight} y={clusterBottom + i * lineHeight} textAnchor="start" dominantBaseline="hanging"
+                <text key={`br-${i}`} x={clusterRight} y={clusterBottom - (quadrants.bottomRight.length - 1 - i) * lineHeight} textAnchor="end" dominantBaseline="auto"
                   fontSize={fontSize} fontFamily="SF Mono, Monaco, monospace"
                   fill={line.isRdma ? 'rgba(255,215,0,0.9)' : 'rgba(255,255,255,0.85)'}>
                   {line.arrow} {line.label}
