@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
-import type { TopologyData, TopologyEdge } from '../../types/topology';
+import { useMemo, useState } from 'react';
+import styled, { css } from 'styled-components';
+import type { TopologyData, TopologyEdge, NodeInfo } from '../../types/topology';
 import { useResizeObserver } from '../../hooks/useResizeObserver';
 import { ClusterNode } from './ClusterNode';
 
@@ -13,7 +14,8 @@ interface NodePosition {
   y: number;
 }
 
-/** Pair key for deduplicating bidirectional edges. */
+/* ---- edge pair helpers ---- */
+
 function edgePairKey(a: string, b: string): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`;
 }
@@ -34,7 +36,7 @@ function buildEdgePairs(edges: TopologyEdge[]): EdgePair[] {
       if (e.source === existing.a) existing.aToB = true;
       else existing.bToA = true;
     } else {
-      const aIsSource = e.source < e.target ? true : false;
+      const aIsSource = e.source < e.target;
       map.set(key, {
         a: aIsSource ? e.source : e.target,
         b: aIsSource ? e.target : e.source,
@@ -45,6 +47,8 @@ function buildEdgePairs(edges: TopologyEdge[]): EdgePair[] {
   }
   return Array.from(map.values());
 }
+
+/* ---- layout ---- */
 
 function computePositions(
   nodeIds: string[],
@@ -79,8 +83,122 @@ function computePositions(
   });
 }
 
+/* ---- debug: connection info per edge pair ---- */
+
+interface ConnectionDetail {
+  label: string;
+  from: string;
+  to: string;
+}
+
+function getConnectionDetails(
+  edges: TopologyEdge[],
+  nodeA: string,
+  nodeB: string,
+  nodes: Record<string, NodeInfo>,
+): ConnectionDetail[] {
+  const details: ConnectionDetail[] = [];
+
+  for (const e of edges) {
+    const isAB = e.source === nodeA && e.target === nodeB;
+    const isBA = e.source === nodeB && e.target === nodeA;
+    if (!isAB && !isBA) continue;
+
+    if (e.sourceRdmaIface && e.sinkRdmaIface) {
+      details.push({
+        label: `RDMA ${e.sourceRdmaIface} → ${e.sinkRdmaIface}`,
+        from: e.source,
+        to: e.target,
+      });
+    } else if (e.sendBackIp) {
+      const iface = e.sendBackInterface ?? nodes[e.source]?.ip_to_interface?.[e.sendBackIp] ?? nodes[e.target]?.ip_to_interface?.[e.sendBackIp];
+      details.push({
+        label: `${e.sendBackIp}${iface ? ` ${iface}` : ''}`,
+        from: e.source,
+        to: e.target,
+      });
+    }
+  }
+
+  return details;
+}
+
+/* ---- debug: quadrant grouping ---- */
+
+interface QuadrantedDetail {
+  detail: ConnectionDetail;
+  midX: number;
+  midY: number;
+}
+
+function groupByQuadrant(
+  items: QuadrantedDetail[],
+  cx: number,
+  cy: number,
+): { topLeft: QuadrantedDetail[]; topRight: QuadrantedDetail[]; bottomLeft: QuadrantedDetail[]; bottomRight: QuadrantedDetail[] } {
+  const topLeft: QuadrantedDetail[] = [];
+  const topRight: QuadrantedDetail[] = [];
+  const bottomLeft: QuadrantedDetail[] = [];
+  const bottomRight: QuadrantedDetail[] = [];
+
+  for (const item of items) {
+    if (item.midX < cx) {
+      if (item.midY < cy) topLeft.push(item);
+      else bottomLeft.push(item);
+    } else {
+      if (item.midY < cy) topRight.push(item);
+      else bottomRight.push(item);
+    }
+  }
+
+  return { topLeft, topRight, bottomLeft, bottomRight };
+}
+
+/* ---- styles ---- */
+
+const Container = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+`;
+
+const DebugToggle = styled.button<{ $active: boolean }>`
+  all: unset;
+  cursor: pointer;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid ${({ $active }) => ($active ? 'rgba(255,215,0,0.5)' : 'rgba(80,80,80,0.4)')};
+  color: ${({ $active }) => ($active ? '#FFD700' : 'rgba(179,179,179,0.6)')};
+  background: ${({ $active }) => ($active ? 'rgba(255,215,0,0.08)' : 'rgba(17,17,17,0.6)')};
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: rgba(255, 215, 0, 0.5);
+    color: #FFD700;
+  }
+`;
+
+const BugIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1" />
+    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6z" />
+    <path d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+  </svg>
+);
+
+/* ---- component ---- */
+
 export function TopologyGraph({ data }: TopologyGraphProps) {
   const [svgRef, { width, height }] = useResizeObserver<SVGSVGElement>();
+  const [debug, setDebug] = useState(false);
 
   const nodeIds = useMemo(() => Object.keys(data.nodes), [data.nodes]);
 
@@ -103,116 +221,209 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
     return Math.max(0.6, 1 - (n - 1) * 0.08);
   }, [nodeIds.length]);
 
+  // Debug: collect all connection details grouped by quadrant
+  const debugDetails = useMemo(() => {
+    if (!debug) return null;
+    const allDetails: QuadrantedDetail[] = [];
+    const cx = width / 2;
+    const cy = height / 2;
+
+    for (const pair of edgePairs) {
+      const pA = posById.get(pair.a);
+      const pB = posById.get(pair.b);
+      if (!pA || !pB) continue;
+
+      const midX = (pA.x + pB.x) / 2;
+      const midY = (pA.y + pB.y) / 2;
+      const details = getConnectionDetails(data.edges, pair.a, pair.b, data.nodes);
+      for (const detail of details) {
+        allDetails.push({ detail, midX, midY });
+      }
+    }
+
+    return groupByQuadrant(allDetails, cx, cy);
+  }, [debug, edgePairs, posById, data.edges, data.nodes, width, height]);
+
   if (width === 0 || height === 0) {
     return (
-      <svg
-        ref={svgRef}
-        style={{ width: '100%', height: '100%', background: '#111' }}
-      />
+      <Container>
+        <DebugToggle $active={debug} onClick={() => setDebug(!debug)} aria-label="Toggle debug info" title="Debug overlay">
+          <BugIcon />
+        </DebugToggle>
+        <svg ref={svgRef} style={{ width: '100%', height: '100%', background: 'transparent' }} />
+      </Container>
     );
   }
 
+  const LINE_H = 12;
+  const PAD = 8;
+
   return (
-    <svg
-      ref={svgRef}
-      style={{ width: '100%', height: '100%', background: '#111' }}
-    >
-      <defs>
-        <marker
-          id="arrowhead"
-          viewBox="0 0 10 10"
-          refX="10"
-          refY="5"
-          markerWidth="11"
-          markerHeight="11"
-          orient="auto-start-reverse"
-        >
-          <path
-            d="M 0 0 L 10 5 L 0 10"
-            fill="none"
-            stroke="#B3B3B3"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </marker>
-        <style>{`
-          .topo-link {
-            stroke: #b3b3b3;
-            stroke-width: 1px;
-            stroke-dasharray: 4 4;
-            opacity: 0.8;
-            animation: topoFlow 0.75s linear infinite;
-          }
-          @keyframes topoFlow {
-            from { stroke-dashoffset: 0; }
-            to   { stroke-dashoffset: -10; }
-          }
-        `}</style>
-      </defs>
+    <Container>
+      <DebugToggle $active={debug} onClick={() => setDebug(!debug)} aria-label="Toggle debug info" title="Debug overlay">
+        <BugIcon />
+      </DebugToggle>
+      <svg
+        ref={svgRef}
+        style={{ width: '100%', height: '100%', background: 'transparent' }}
+      >
+        <defs>
+          <marker
+            id="arrowhead"
+            viewBox="0 0 10 10"
+            refX="10"
+            refY="5"
+            markerWidth="11"
+            markerHeight="11"
+            orient="auto-start-reverse"
+          >
+            <path
+              d="M 0 0 L 10 5 L 0 10"
+              fill="none"
+              stroke="#B3B3B3"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </marker>
+          <style>{`
+            .topo-link {
+              stroke: #b3b3b3;
+              stroke-width: 1px;
+              stroke-dasharray: 4 4;
+              opacity: 0.8;
+              animation: topoFlow 0.75s linear infinite;
+            }
+            @keyframes topoFlow {
+              from { stroke-dashoffset: 0; }
+              to   { stroke-dashoffset: -10; }
+            }
+          `}</style>
+        </defs>
 
-      {/* Edges */}
-      <g>
-        {edgePairs.map((pair) => {
-          const pA = posById.get(pair.a);
-          const pB = posById.get(pair.b);
-          if (!pA || !pB) return null;
+        {/* Edges */}
+        <g>
+          {edgePairs.map((pair) => {
+            const pA = posById.get(pair.a);
+            const pB = posById.get(pair.b);
+            if (!pA || !pB) return null;
 
-          const dx = pB.x - pA.x;
-          const dy = pB.y - pA.y;
-          const len = Math.hypot(dx, dy) || 1;
-          const ux = dx / len;
-          const uy = dy / len;
-          const mx = (pA.x + pB.x) / 2;
-          const my = (pA.y + pB.y) / 2;
-          const tipOffset = 16;
-          const carrier = 2;
+            const dx = pB.x - pA.x;
+            const dy = pB.y - pA.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+            const mx = (pA.x + pB.x) / 2;
+            const my = (pA.y + pB.y) / 2;
+            const tipOffset = 16;
+            const carrier = 2;
+
+            return (
+              <g key={`${pair.a}-${pair.b}`}>
+                <line
+                  x1={pA.x} y1={pA.y}
+                  x2={pB.x} y2={pB.y}
+                  className="topo-link"
+                />
+                {pair.aToB && (
+                  <line
+                    x1={mx - ux * (tipOffset + carrier)}
+                    y1={my - uy * (tipOffset + carrier)}
+                    x2={mx - ux * tipOffset}
+                    y2={my - uy * tipOffset}
+                    stroke="none"
+                    markerEnd="url(#arrowhead)"
+                  />
+                )}
+                {pair.bToA && (
+                  <line
+                    x1={mx + ux * (tipOffset + carrier)}
+                    y1={my + uy * (tipOffset + carrier)}
+                    x2={mx + ux * tipOffset}
+                    y2={my + uy * tipOffset}
+                    stroke="none"
+                    markerEnd="url(#arrowhead)"
+                  />
+                )}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Nodes */}
+        <g>
+          {positions.map((pos) => (
+            <ClusterNode
+              key={pos.id}
+              nodeId={pos.id}
+              nodeInfo={data.nodes[pos.id]}
+              x={pos.x}
+              y={pos.y}
+              scale={nodeScale}
+            />
+          ))}
+        </g>
+
+        {/* Debug: node metadata below each node */}
+        {debug && positions.map((pos) => {
+          const info = data.nodes[pos.id];
+          if (!info) return null;
+          const tb = info.thunderbolt_bridge ? 'ON' : 'OFF';
+          const rdma = info.rdma_enabled ? 'ON' : 'OFF';
+          const os = info.os_version ? `macOS ${info.os_version}${info.os_build_version ? ` (${info.os_build_version})` : ''}` : '';
+          const baseY = pos.y + 75 * nodeScale;
 
           return (
-            <g key={`${pair.a}-${pair.b}`}>
-              <line
-                x1={pA.x} y1={pA.y}
-                x2={pB.x} y2={pB.y}
-                className="topo-link"
-              />
-              {pair.aToB && (
-                <line
-                  x1={mx - ux * (tipOffset + carrier)}
-                  y1={my - uy * (tipOffset + carrier)}
-                  x2={mx - ux * tipOffset}
-                  y2={my - uy * tipOffset}
-                  stroke="none"
-                  markerEnd="url(#arrowhead)"
-                />
-              )}
-              {pair.bToA && (
-                <line
-                  x1={mx + ux * (tipOffset + carrier)}
-                  y1={my + uy * (tipOffset + carrier)}
-                  x2={mx + ux * tipOffset}
-                  y2={my + uy * tipOffset}
-                  stroke="none"
-                  markerEnd="url(#arrowhead)"
-                />
+            <g key={`debug-${pos.id}`}>
+              <text x={pos.x} y={baseY} textAnchor="middle" fontSize="8" fontFamily="SF Mono, Monaco, monospace" fill="rgba(179,179,179,0.5)">
+                TB:{tb}
+              </text>
+              <text x={pos.x} y={baseY + LINE_H} textAnchor="middle" fontSize="8" fontFamily="SF Mono, Monaco, monospace" fill="rgba(179,179,179,0.5)">
+                RDMA:{rdma}
+              </text>
+              {os && (
+                <text x={pos.x} y={baseY + LINE_H * 2} textAnchor="middle" fontSize="8" fontFamily="SF Mono, Monaco, monospace" fill="rgba(179,179,179,0.4)">
+                  {os}
+                </text>
               )}
             </g>
           );
         })}
-      </g>
 
-      {/* Nodes */}
-      <g>
-        {positions.map((pos) => (
-          <ClusterNode
-            key={pos.id}
-            nodeId={pos.id}
-            nodeInfo={data.nodes[pos.id]}
-            x={pos.x}
-            y={pos.y}
-            scale={nodeScale}
-          />
-        ))}
-      </g>
-    </svg>
+        {/* Debug: connection details in corners */}
+        {debug && debugDetails && (
+          <g>
+            {/* Top Left */}
+            {debugDetails.topLeft.map((item, i) => (
+              <text key={`tl-${i}`} x={PAD} y={PAD + i * LINE_H} textAnchor="start" dominantBaseline="hanging" fontSize="7" fontFamily="SF Mono, Monaco, monospace"
+                fill={item.detail.label.startsWith('RDMA') ? 'rgba(255,215,0,0.7)' : 'rgba(255,255,255,0.6)'}>
+                ↗ {item.detail.label}
+              </text>
+            ))}
+            {/* Top Right */}
+            {debugDetails.topRight.map((item, i) => (
+              <text key={`tr-${i}`} x={width - PAD} y={PAD + i * LINE_H} textAnchor="end" dominantBaseline="hanging" fontSize="7" fontFamily="SF Mono, Monaco, monospace"
+                fill={item.detail.label.startsWith('RDMA') ? 'rgba(255,215,0,0.7)' : 'rgba(255,255,255,0.6)'}>
+                ↗ {item.detail.label}
+              </text>
+            ))}
+            {/* Bottom Left */}
+            {debugDetails.bottomLeft.map((item, i) => (
+              <text key={`bl-${i}`} x={PAD} y={height - PAD - (debugDetails.bottomLeft.length - 1 - i) * LINE_H} textAnchor="start" dominantBaseline="auto" fontSize="7" fontFamily="SF Mono, Monaco, monospace"
+                fill={item.detail.label.startsWith('RDMA') ? 'rgba(255,215,0,0.7)' : 'rgba(255,255,255,0.6)'}>
+                → {item.detail.label}
+              </text>
+            ))}
+            {/* Bottom Right */}
+            {debugDetails.bottomRight.map((item, i) => (
+              <text key={`br-${i}`} x={width - PAD} y={height - PAD - (debugDetails.bottomRight.length - 1 - i) * LINE_H} textAnchor="end" dominantBaseline="auto" fontSize="7" fontFamily="SF Mono, Monaco, monospace"
+                fill={item.detail.label.startsWith('RDMA') ? 'rgba(255,215,0,0.7)' : 'rgba(255,255,255,0.6)'}>
+                → {item.detail.label}
+              </text>
+            ))}
+          </g>
+        )}
+      </svg>
+    </Container>
   );
 }
