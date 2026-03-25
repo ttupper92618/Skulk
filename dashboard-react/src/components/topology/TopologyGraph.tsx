@@ -349,22 +349,18 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
             const mx = (pA.x + pB.x) / 2;
             const my = (pA.y + pB.y) / 2;
 
-            // Angle from graph center to edge midpoint (0 = right, π/2 = down)
-            const angle = Math.atan2(my - gcy, mx - gcx);
-            // Normalize to 0-360: 0° = right, 90° = down, 180° = left, 270° = up
-            const deg = ((angle * 180 / Math.PI) + 360) % 360;
-            // 0-180° (right half): place to the right; 181-359° (left half): place to the left
-            const onRight = deg <= 180;
-
-            // Push outward from graph center
+            // Vector from graph center to edge midpoint
             const toMidX = mx - gcx;
             const toMidY = my - gcy;
             const toMidLen = Math.hypot(toMidX, toMidY) || 1;
-            const pushDist = 80;
+
+            // Push outward from center
+            const pushDist = 100;
             const tx = mx + (toMidX / toMidLen) * pushDist;
             const ty = my + (toMidY / toMidLen) * pushDist;
 
-            const anchor = onRight ? 'start' : 'end';
+            // Anchor based on which side of center the label lands
+            const anchor = tx < gcx - 20 ? 'end' : tx > gcx + 20 ? 'start' : 'middle';
 
             return (
               <g key={`conn-${pair.a}-${pair.b}`}>
