@@ -24,6 +24,8 @@ export interface InfoTooltipProps {
   placement?: Placement;
   /** Hover delay in ms before showing. Default 200. */
   delay?: number;
+  /** Fill the default info icon. Default false (outline only). */
+  filled?: boolean;
   /** Custom trigger element. Defaults to info icon. */
   children?: React.ReactNode;
   className?: string;
@@ -58,11 +60,11 @@ const TooltipBox = styled.div`
 
 const ARROW_SIZE = 8;
 
-const InfoIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const InfoIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" />
-    <path d="M12 16v-4" />
-    <path d="M12 8h.01" />
+    <path d="M12 16v-4" stroke={filled ? '#000' : 'currentColor'} />
+    <path d="M12 8h.01" stroke={filled ? '#000' : 'currentColor'} />
   </svg>
 );
 
@@ -70,6 +72,7 @@ export function InfoTooltip({
   content,
   placement = 'top',
   delay = 200,
+  filled = false,
   children,
   className,
 }: InfoTooltipProps) {
@@ -109,7 +112,7 @@ export function InfoTooltip({
         className={className}
         tabIndex={0}
       >
-        {children ?? <InfoIcon />}
+        {children ?? <InfoIcon filled={filled} />}
       </Trigger>
 
       {isOpen && (
