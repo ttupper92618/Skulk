@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import styled, { css } from 'styled-components';
-import type { TopologyData, TopologyEdge, NodeInfo } from '../../types/topology';
+import { useMemo } from 'react';
+import styled from 'styled-components';
+import type { TopologyData, TopologyEdge } from '../../types/topology';
 import { useResizeObserver } from '../../hooks/useResizeObserver';
 import { ClusterNode } from './ClusterNode';
 
@@ -93,43 +93,10 @@ const Container = styled.div`
   height: 100%;
 `;
 
-const DebugToggle = styled.button<{ $active: boolean }>`
-  all: unset;
-  cursor: pointer;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid ${({ $active }) => ($active ? 'rgba(255,215,0,0.5)' : 'rgba(80,80,80,0.4)')};
-  color: ${({ $active }) => ($active ? '#FFD700' : 'rgba(179,179,179,0.6)')};
-  background: ${({ $active }) => ($active ? 'rgba(255,215,0,0.08)' : 'rgba(17,17,17,0.6)')};
-  transition: all 0.15s;
-
-  &:hover {
-    border-color: rgba(255, 215, 0, 0.5);
-    color: #FFD700;
-  }
-`;
-
-const BugIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1" />
-    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6z" />
-    <path d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4" />
-  </svg>
-);
-
 /* ---- component ---- */
 
 export function TopologyGraph({ data }: TopologyGraphProps) {
   const [svgRef, { width, height }] = useResizeObserver<SVGSVGElement>();
-  const [debug, setDebug] = useState(false);
 
   const nodeIds = useMemo(() => Object.keys(data.nodes), [data.nodes]);
 
@@ -156,9 +123,6 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
   if (width === 0 || height === 0) {
     return (
       <Container>
-        <DebugToggle $active={debug} onClick={() => setDebug(!debug)} aria-label="Toggle debug info" title="Debug overlay">
-          <BugIcon />
-        </DebugToggle>
         <svg ref={svgRef} style={{ width: '100%', height: '100%', background: 'transparent' }} />
       </Container>
     );
@@ -166,9 +130,6 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
 
   return (
     <Container>
-      <DebugToggle $active={debug} onClick={() => setDebug(!debug)} aria-label="Toggle debug info" title="Debug overlay">
-        <BugIcon />
-      </DebugToggle>
       <svg
         ref={svgRef}
         style={{ width: '100%', height: '100%', background: 'transparent' }}
@@ -266,7 +227,6 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
               x={pos.x}
               y={pos.y}
               scale={nodeScale}
-              debug={debug}
               edges={data.edges}
               allNodes={data.nodes}
             />

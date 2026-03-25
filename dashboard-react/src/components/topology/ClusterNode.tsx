@@ -14,11 +14,9 @@ export interface ClusterNodeProps {
   y: number;
   /** Overall scale factor — controls the icon size; defaults to 1 */
   scale?: number;
-  /** When true, show the debug info icon on this node. */
-  debug?: boolean;
-  /** All edges in the topology (needed for debug connection info). */
+  /** All edges in the topology (needed for node info tooltip). */
   edges?: TopologyEdge[];
-  /** All nodes (needed for interface name resolution in debug). */
+  /** All nodes (needed for interface name resolution). */
   allNodes?: Record<string, NodeInfo>;
 }
 
@@ -91,7 +89,6 @@ export function ClusterNode({
   x,
   y,
   scale = 1,
-  debug = false,
   edges = [],
   allNodes = {},
 }: ClusterNodeProps) {
@@ -131,7 +128,7 @@ export function ClusterNode({
   const iconLeft = -iconW / 2;
   const iconTop = -iconH / 2;
 
-  const debugContent = debug ? buildDebugContent(nodeId, nodeInfo, edges, allNodes) : undefined;
+  const debugContent = buildDebugContent(nodeId, nodeInfo, edges, allNodes);
 
   return (
     <g transform={`translate(${x}, ${y}) scale(${scale})`}>

@@ -36,11 +36,11 @@ const Trigger = styled.span`
   align-items: center;
   justify-content: center;
   cursor: help;
-  color: ${({ theme }) => theme.colors.textMuted};
+  color: ${({ theme }) => theme.colors.textSecondary};
   transition: color 0.15s;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.textSecondary};
+    color: ${({ theme }) => theme.colors.text};
   }
 `;
 
@@ -60,7 +60,7 @@ const TooltipBox = styled.div`
 
 const ARROW_SIZE = 8;
 
-const InfoIcon = ({ filled = false, size = 16 }: { filled?: boolean; size?: number }) => (
+const InfoIcon = ({ filled = false, size = 18 }: { filled?: boolean; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" />
     <path d="M12 16v-4" stroke={filled ? '#000' : 'currentColor'} />
