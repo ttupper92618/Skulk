@@ -72,7 +72,7 @@ const HeaderRow = styled.div`
 const HeaderText = styled.span`
   font-size: 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  color: ${({ theme }) => theme.colors.textSecondary};
+  color: rgba(255, 255, 255, 0.7);
 `;
 
 
@@ -111,7 +111,7 @@ const THead = styled.div`
   font-family: ${({ theme }) => theme.fonts.mono};
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: ${({ theme }) => theme.colors.textMuted};
+  color: rgba(255, 255, 255, 0.5);
 `;
 
 const TRow = styled.div<{ $highlight?: boolean }>`
@@ -172,7 +172,7 @@ const PulseDot = styled.span`
 const Cell = styled.div<{ $align?: string }>`
   font-size: 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  color: ${({ theme }) => theme.colors.textSecondary};
+  color: rgba(255, 255, 255, 0.7);
   text-align: ${({ $align }) => $align ?? 'left'};
 `;
 
@@ -200,8 +200,9 @@ const ProgressText = styled.span`
 
 const ActionsCell = styled.div`
   display: flex;
-  gap: 4px;
-  opacity: 0.4;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.7;
   transition: opacity 0.15s;
   ${TRow}:hover & { opacity: 1; }
 `;
@@ -343,7 +344,7 @@ export function StoreRegistryTable({
                     delay={100}
                   />
                   <Button variant="danger" size="sm" icon onClick={() => onDelete(entry, active)} title="Delete model">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </Button>
