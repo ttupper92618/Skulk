@@ -403,7 +403,7 @@ class Node:
                     )
                 if result.is_new_master:
                     if self.download_coordinator:
-                        self.download_coordinator.shutdown()
+                        await self.download_coordinator.shutdown()
                         base_dl = exo_shard_downloader(offline=self.offline)
                         ms = (
                             self.exo_config.model_store
@@ -445,7 +445,7 @@ class Node:
                         )
                         self._tg.start_soon(self.download_coordinator.run)
                     if self.worker:
-                        self.worker.shutdown()
+                        await self.worker.shutdown()
                         ms2 = (
                             self.exo_config.model_store
                             if self.exo_config is not None
