@@ -367,6 +367,7 @@ export function ModelPickerGroup({
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTooltip
             filled
+            size={16}
             placement="right"
             delay={100}
             content={<ModelGroupInfo group={group} />}

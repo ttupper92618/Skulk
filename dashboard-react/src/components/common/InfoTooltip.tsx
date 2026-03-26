@@ -27,6 +27,8 @@ export interface InfoTooltipProps {
   delay?: number;
   /** Fill the default info icon. Default false (outline only). */
   filled?: boolean;
+  /** Icon size in px. Default 20. */
+  size?: number;
   /** Custom trigger element. Defaults to info icon. */
   children?: React.ReactNode;
   className?: string;
@@ -74,6 +76,7 @@ export function InfoTooltip({
   placement = 'top',
   delay = 200,
   filled = false,
+  size = 20,
   children,
   className,
 }: InfoTooltipProps) {
@@ -116,7 +119,7 @@ export function InfoTooltip({
         className={className}
         tabIndex={0}
       >
-        {children ?? <InfoIcon filled={filled} />}
+        {children ?? <InfoIcon filled={filled} size={size} />}
       </Trigger>
 
       {isOpen && (
