@@ -1,9 +1,13 @@
 import styled, { css } from 'styled-components';
 import { Button } from '../common/Button';
 
+export type NavRoute = 'home' | 'downloads';
+
 export interface HeaderNavProps {
   showHome?: boolean;
   onHome?: () => void;
+  activeRoute?: NavRoute;
+  onNavigate?: (route: NavRoute) => void;
   showSidebarToggle?: boolean;
   sidebarVisible?: boolean;
   onToggleSidebar?: () => void;
@@ -76,7 +80,7 @@ const LogoText = styled.span`
   filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
 `;
 
-const NavLink = styled.a`
+const NavLink = styled.button<{ $active?: boolean }>`
   all: unset;
   cursor: pointer;
   display: flex;
@@ -84,12 +88,13 @@ const NavLink = styled.a`
   gap: 6px;
   padding: 6px 12px;
   border-radius: ${({ theme }) => theme.radii.md};
-  border: 1px solid rgba(179, 179, 179, 0.3);
+  border: 1px solid ${({ $active }) => $active ? 'rgba(255, 215, 0, 0.5)' : 'rgba(179, 179, 179, 0.3)'};
+  background: ${({ $active }) => $active ? 'rgba(255, 215, 0, 0.08)' : 'transparent'};
   font-size: 11px;
   font-family: ${({ theme }) => theme.fonts.mono};
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(179, 179, 179, 0.8);
+  color: ${({ $active }) => $active ? '#FFD700' : 'rgba(179, 179, 179, 0.8)'};
   transition: all 0.15s;
 
   &:hover {
@@ -137,6 +142,13 @@ const DownloadIcon = () => (
   </svg>
 );
 
+const HomeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
 const SettingsIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <circle cx="12" cy="12" r="3" />
@@ -174,6 +186,8 @@ function ProgressCircle({ count, percentage }: { count: number; percentage: numb
 export function HeaderNav({
   showHome = true,
   onHome,
+  activeRoute = 'home',
+  onNavigate,
   showSidebarToggle = false,
   sidebarVisible = true,
   onToggleSidebar,
@@ -187,6 +201,11 @@ export function HeaderNav({
   onOpenSettings,
   className,
 }: HeaderNavProps) {
+  const navigate = (route: NavRoute) => {
+    onNavigate?.(route);
+    if (route === 'home') onHome?.();
+  };
+
   return (
     <Nav className={className}>
       <LeftGroup>
@@ -200,7 +219,7 @@ export function HeaderNav({
             <SidebarIcon />
           </ToggleBtn>
         )}
-        <LogoBtn $disabled={!showHome} onClick={showHome ? onHome : undefined}>
+        <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('home') : undefined}>
           <LogoText>FoxmemEX0</LogoText>
         </LogoBtn>
       </LeftGroup>
@@ -208,11 +227,15 @@ export function HeaderNav({
       <RightGroup>
         {downloadProgress && <ProgressCircle count={downloadProgress.count} percentage={downloadProgress.percentage} />}
 
-        <NavLink href="/#/downloads">
+        <NavLink $active={activeRoute === 'home'} onClick={() => navigate('home')}>
+          <HomeIcon /> Home
+        </NavLink>
+
+        <NavLink $active={activeRoute === 'downloads'} onClick={() => navigate('downloads')}>
           <DownloadIcon /> Downloads
         </NavLink>
 
-        <Button variant="ghost" size="lg" icon onClick={onOpenSettings} aria-label="Settings">
+        <Button variant="ghost" size="lg" icon onClick={() => onOpenSettings?.()} aria-label="Settings">
           <SettingsIcon />
         </Button>
 
