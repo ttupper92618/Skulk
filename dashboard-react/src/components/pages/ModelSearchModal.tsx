@@ -152,10 +152,14 @@ const Backdrop = styled.div`
 
 const ModalContainer = styled.div`
   position: fixed;
-  inset: 40px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 51;
   display: flex;
   flex-direction: column;
+  width: min(90vw, 600px);
+  height: min(80vh, 700px);
   background: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
