@@ -1,7 +1,10 @@
-import { useMemo } from 'react';
-import styled from 'styled-components';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import styled, { css } from 'styled-components';
 import type { TopologyData } from '../../types/topology';
 import type { RawDownloads, NodeDiskInfo } from '../../hooks/useClusterState';
+import { StoreRegistryTable, type StoreRegistryEntry } from '../layout/StoreRegistryTable';
+
+type Tab = 'nodes' | 'store';
 
 interface DownloadsPageProps {
   topology: TopologyData | null;
@@ -145,58 +148,99 @@ function formatSpeed(bps: number): string {
 /* ── Component ────────────────────────────────────────── */
 
 export function DownloadsPage({ topology, downloads, nodeDisk, lastUpdate }: DownloadsPageProps) {
+  const [tab, setTab] = useState<Tab>('nodes');
+  const [storeEntries, setStoreEntries] = useState<StoreRegistryEntry[]>([]);
+  const [storeLoading, setStoreLoading] = useState(false);
+
   const { rows, columns } = useMemo(
     () => buildGrid(downloads, topology, nodeDisk),
     [downloads, topology, nodeDisk],
   );
 
+  const loadRegistry = useCallback(async () => {
+    setStoreLoading(true);
+    try {
+      const res = await fetch('/store/registry');
+      if (!res.ok) return;
+      const data = await res.json();
+      setStoreEntries(data.entries ?? []);
+    } catch { /* ignore */ }
+    finally { setStoreLoading(false); }
+  }, []);
+
+  // Load store registry when switching to store tab
+  useEffect(() => {
+    if (tab === 'store') loadRegistry();
+  }, [tab, loadRegistry]);
+
   return (
     <Container>
       <Header>
-        <Title>DOWNLOADS</Title>
-        <Subtitle>Overview of models on each node</Subtitle>
+        <div>
+          <Title>DOWNLOADS</Title>
+          <Subtitle>Overview of models on each node</Subtitle>
+        </div>
         <LastUpdate>
           Last update: {lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : '--'}
         </LastUpdate>
       </Header>
 
-      {rows.length === 0 ? (
-        <EmptyState>
-          No downloads found. Start a model download to see progress here.
-        </EmptyState>
-      ) : (
-        <TableWrap>
-          <Table>
-            <thead>
-              <tr>
-                <ModelHeader>MODEL</ModelHeader>
-                {columns.map((col) => (
-                  <NodeHeader key={col.nodeId}>
-                    <NodeName>{col.label.toUpperCase()}</NodeName>
-                    {col.diskFreeBytes != null && (
-                      <DiskFree>{formatBytes(col.diskFreeBytes)} free</DiskFree>
-                    )}
-                  </NodeHeader>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.modelId}>
-                  <ModelCell>{row.modelId}</ModelCell>
-                  {columns.map((col) => {
-                    const cell = row.cells[col.nodeId];
-                    return (
-                      <StatusCell key={col.nodeId}>
-                        {cell ? <CellContent cell={cell} /> : <NotPresent>--</NotPresent>}
-                      </StatusCell>
-                    );
-                  })}
+      <SegmentedToggle>
+        <SegmentBtn $active={tab === 'nodes'} onClick={() => setTab('nodes')}>
+          Node Downloads
+        </SegmentBtn>
+        <SegmentBtn $active={tab === 'store'} onClick={() => setTab('store')}>
+          Store Registry
+        </SegmentBtn>
+      </SegmentedToggle>
+
+      {tab === 'nodes' ? (
+        rows.length === 0 ? (
+          <EmptyState>
+            No downloads found. Start a model download to see progress here.
+          </EmptyState>
+        ) : (
+          <TableWrap>
+            <Table>
+              <thead>
+                <tr>
+                  <ModelHeader>MODEL</ModelHeader>
+                  {columns.map((col) => (
+                    <NodeHeader key={col.nodeId}>
+                      <NodeName>{col.label.toUpperCase()}</NodeName>
+                      {col.diskFreeBytes != null && (
+                        <DiskFree>{formatBytes(col.diskFreeBytes)} free</DiskFree>
+                      )}
+                    </NodeHeader>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrap>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.modelId}>
+                    <ModelCell>{row.modelId}</ModelCell>
+                    {columns.map((col) => {
+                      const cell = row.cells[col.nodeId];
+                      return (
+                        <StatusCell key={col.nodeId}>
+                          {cell ? <CellContent cell={cell} /> : <NotPresent>--</NotPresent>}
+                        </StatusCell>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrap>
+        )
+      ) : (
+        <StoreRegistryTable
+          entries={storeEntries}
+          loading={storeLoading}
+          onRefresh={loadRegistry}
+          onInfo={() => {}}
+          onDelete={() => {}}
+        />
       )}
     </Container>
   );
@@ -255,7 +299,11 @@ const Container = styled.div`
 `;
 
 const Header = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 24px;
+  position: relative;
 `;
 
 const Title = styled.h1`
@@ -275,12 +323,49 @@ const Subtitle = styled.p`
 `;
 
 const LastUpdate = styled.div`
-  position: absolute;
-  top: 0;
-  right: 0;
   font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 11px;
   color: ${({ theme }) => theme.colors.textMuted};
+  white-space: nowrap;
+`;
+
+const SegmentedToggle = styled.div`
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+`;
+
+const SegmentBtn = styled.button<{ $active: boolean }>`
+  all: unset;
+  cursor: pointer;
+  padding: 8px 20px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+
+  ${({ $active }) =>
+    $active
+      ? css`
+          background: #FFD700;
+          color: #111;
+          font-weight: 600;
+        `
+      : css`
+          background: rgba(0, 0, 0, 0.3);
+          color: rgba(179, 179, 179, 0.8);
+          &:hover {
+            color: #fff;
+          }
+        `}
+
+  &:first-child {
+    border-radius: 4px 0 0 4px;
+  }
+  &:last-child {
+    border-radius: 0 4px 4px 0;
+  }
 `;
 
 const EmptyState = styled.div`
