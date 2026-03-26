@@ -70,9 +70,9 @@ const HeaderRow = styled.div`
 `;
 
 const HeaderText = styled.span`
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   font-family: ${({ theme }) => theme.fonts.mono};
-  color: rgba(255, 255, 255, 0.7);
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 
@@ -107,11 +107,11 @@ const THead = styled.div`
   gap: 8px;
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.4);
-  font-size: 10px;
+  font-size: ${({ theme }) => theme.fontSizes.tableHead};
   font-family: ${({ theme }) => theme.fonts.mono};
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.5);
+  color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const TRow = styled.div<{ $highlight?: boolean }>`
@@ -138,7 +138,7 @@ const ModelCell = styled.div`
 `;
 
 const ModelId = styled.span`
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-family: ${({ theme }) => theme.fonts.mono};
   color: ${({ theme }) => theme.colors.text};
   white-space: nowrap;
@@ -170,9 +170,9 @@ const PulseDot = styled.span`
 `;
 
 const Cell = styled.div<{ $align?: string }>`
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-family: ${({ theme }) => theme.fonts.mono};
-  color: rgba(255, 255, 255, 0.7);
+  color: ${({ theme }) => theme.colors.textSecondary};
   text-align: ${({ $align }) => $align ?? 'left'};
 `;
 

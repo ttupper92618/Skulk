@@ -326,23 +326,23 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
   padding: 8px 20px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.nav};
   text-transform: uppercase;
   letter-spacing: 1px;
   transition: all 0.15s;
 
-  ${({ $active }) =>
+  ${({ $active, theme }) =>
     $active
       ? css`
-          background: #FFD700;
-          color: #111;
+          background: ${theme.colors.gold};
+          color: ${theme.colors.surface};
           font-weight: 600;
         `
       : css`
           background: rgba(0, 0, 0, 0.3);
-          color: rgba(179, 179, 179, 0.8);
+          color: ${theme.colors.textSecondary};
           &:hover {
-            color: #fff;
+            color: ${theme.colors.text};
           }
         `}
 
@@ -357,16 +357,16 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
 const EmptyState = styled.div`
   text-align: center;
   padding: 48px 24px;
-  border: 1px solid rgba(179, 179, 179, 0.2);
+  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
   background: rgba(0, 0, 0, 0.2);
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const TableWrap = styled.div`
-  border: 1px solid rgba(179, 179, 179, 0.2);
+  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
   background: rgba(0, 0, 0, 0.2);
   overflow-x: auto;
@@ -376,51 +376,51 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
 `;
 
 const ModelHeader = styled.th`
   text-align: left;
   padding: 16px 20px;
-  color: #FFD700;
-  font-size: 11px;
+  color: ${({ theme }) => theme.colors.gold};
+  font-size: ${({ theme }) => theme.fontSizes.tableHead};
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  border-bottom: 1px solid rgba(179, 179, 179, 0.15);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
 const NodeHeader = styled.th`
   text-align: center;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(179, 179, 179, 0.15);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
 const NodeName = styled.div`
   color: ${({ theme }) => theme.colors.text};
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-weight: 600;
   letter-spacing: 0.5px;
 `;
 
 const DiskFree = styled.div`
   color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 10px;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
   margin-top: 2px;
 `;
 
 const ModelCell = styled.td`
   padding: 16px 20px;
   color: ${({ theme }) => theme.colors.text};
-  font-size: 12px;
-  border-bottom: 1px solid rgba(179, 179, 179, 0.08);
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   white-space: nowrap;
 `;
 
 const StatusCell = styled.td`
   text-align: center;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(179, 179, 179, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 `;
 
 const CellInner = styled.div`
@@ -431,18 +431,18 @@ const CellInner = styled.div`
 `;
 
 const CellSize = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 const ProgressText = styled.div<{ $color: string }>`
-  font-size: 13px;
+  font-size: ${({ theme }) => theme.fontSizes.md};
   font-weight: 600;
   color: ${({ $color }) => $color};
 `;
 
 const FailedText = styled.div`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   font-weight: 600;
   color: ${({ theme }) => theme.colors.error};
   text-transform: uppercase;
