@@ -148,7 +148,9 @@ export function ModelBrowser({
     picker.filters.downloadedOnly ||
     picker.filters.readyOnly;
 
-  const hfModels = hfSearchResults ?? hfTrendingModels ?? [];
+  const hfModels = (hfSearchResults && hfSearchResults.length > 0)
+    ? hfSearchResults
+    : (picker.searchQuery.trim() ? [] : hfTrendingModels ?? []);
 
   return (
     <Container>
@@ -203,6 +205,9 @@ export function ModelBrowser({
               {hfIsSearching && <EmptyMsg>Searching…</EmptyMsg>}
               {!hfIsSearching && hfModels.length === 0 && picker.searchQuery && (
                 <EmptyMsg>No results found</EmptyMsg>
+              )}
+              {!picker.searchQuery.trim() && hfModels.length > 0 && (
+                <SectionHeader>Trending</SectionHeader>
               )}
               {hfModels.map((m) => (
                 <HuggingFaceResultItem
