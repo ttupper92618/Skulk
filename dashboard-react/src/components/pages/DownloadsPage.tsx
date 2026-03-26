@@ -250,7 +250,6 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
           entries={storeEntries}
           loading={storeLoading}
           onRefresh={loadRegistry}
-          onInfo={() => {}}
           onDelete={() => {}}
         />
       )}

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { formatBytes } from '../../utils/format';
 import { Button } from '../common/Button';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 /* ================================================================
    Types
@@ -26,7 +27,6 @@ export interface StoreRegistryTableProps {
   loading?: boolean;
   activeModelIds?: string[];
   onRefresh: () => void;
-  onInfo: (entry: StoreRegistryEntry) => void;
   onDelete: (entry: StoreRegistryEntry, isActive: boolean) => void;
 }
 
@@ -211,13 +211,42 @@ const ActionsCell = styled.div`
    Component
    ================================================================ */
 
+function ModelInfoContent({ entry }: { entry: StoreRegistryEntry }) {
+  return (
+    <div style={{ minWidth: 220 }}>
+      <div style={{ color: '#FFD700', fontWeight: 600, marginBottom: 6, fontSize: 11 }}>
+        {entry.model_id}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 11 }}>
+        <span style={{ color: '#888' }}>Size</span>
+        <span>{formatBytes(entry.total_bytes)}</span>
+        <span style={{ color: '#888' }}>Files</span>
+        <span>{entry.files.length}</span>
+        <span style={{ color: '#888' }}>Downloaded</span>
+        <span>{new Date(entry.downloaded_at).toLocaleString()}</span>
+      </div>
+      {entry.files.length > 0 && (
+        <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 6 }}>
+          <div style={{ color: '#888', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Files
+          </div>
+          <div style={{ fontSize: 10, color: '#aaa', maxHeight: 120, overflowY: 'auto' }}>
+            {entry.files.map((f) => (
+              <div key={f}>{f}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StoreRegistryTable({
   entries,
   activeDownloads = [],
   loading = false,
   activeModelIds = [],
   onRefresh,
-  onInfo,
   onDelete,
 }: StoreRegistryTableProps) {
   const registeredIds = useMemo(() => new Set(entries.map((e) => e.model_id)), [entries]);
@@ -307,11 +336,12 @@ export function StoreRegistryTable({
                   )}
                 </Cell>
                 <ActionsCell>
-                  <Button variant="ghost" size="sm" icon onClick={() => onInfo(entry)} title="Model info">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-                    </svg>
-                  </Button>
+                  <InfoTooltip
+                    content={<ModelInfoContent entry={entry} />}
+                    placement="left"
+                    filled
+                    delay={100}
+                  />
                   <Button variant="danger" size="sm" icon onClick={() => onDelete(entry, active)} title="Delete model">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
