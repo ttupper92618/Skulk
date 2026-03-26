@@ -167,7 +167,7 @@ const ModalContainer = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
   overflow: hidden;
-  box-shadow: 0 0 40px rgba(255, 255, 255, 0.08), 0 0 80px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 43px rgba(0, 0, 0, 0.70), 0 0 88px rgba(0, 0, 0, 0.70);
 `;
 
 const ModalHeader = styled.div`

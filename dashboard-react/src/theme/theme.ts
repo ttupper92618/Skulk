@@ -3,7 +3,7 @@ export const theme = {
     bg: '#000000',
     surface: '#111111',
     surfaceHover: '#1a1a1a',
-    border: 'rgba(255, 255, 255, 0.12)',
+    border: 'rgba(255, 255, 255, 0.21)',
     borderLight: 'rgba(255, 255, 255, 0.18)',
     text: '#ffffff',
     textSecondary: 'rgba(255, 255, 255, 0.7)',

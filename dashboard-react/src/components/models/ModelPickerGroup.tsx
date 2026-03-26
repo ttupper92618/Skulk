@@ -207,6 +207,10 @@ const VariantRow = styled.div`
   }
 `;
 
+const InfoIconWrapper = styled.span`
+  transform: translateY(2px);
+`;
+
 /* ---------- component ---------- */
 
 function ModelGroupInfo({ group }: { group: ModelGroup }) {
@@ -364,7 +368,7 @@ export function ModelPickerGroup({
         </FavStar>
 
         {/* Info */}
-        <span onClick={(e) => e.stopPropagation()}>
+        <InfoIconWrapper onClick={(e) => e.stopPropagation()}>
           <InfoTooltip
             filled
             size={16}
@@ -372,7 +376,7 @@ export function ModelPickerGroup({
             delay={100}
             content={<ModelGroupInfo group={group} />}
           />
-        </span>
+        </InfoIconWrapper>
       </Row>
 
       {/* Expanded variants */}
