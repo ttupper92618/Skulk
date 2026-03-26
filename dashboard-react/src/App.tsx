@@ -34,13 +34,13 @@ export function App() {
       <NetworkMesh radius={2.5} lineColor="rgba(255,215,0,0.35)" />
       <Shell>
         <ConnectionBanner connected={connected} />
-        <ClusterWarnings topology={topology} />
         <HeaderNav
           showHome
           showSidebarToggle
           sidebarVisible={false}
           onOpenSettings={() => setSettingsOpen(true)}
         />
+        <ClusterWarnings topology={topology} />
         <Main>
           {topology ? (
             <TopologyGraph data={topology} />
