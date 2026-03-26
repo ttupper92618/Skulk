@@ -8,6 +8,7 @@ import type {
   PickerMode,
 } from '../../types/models';
 import { formatBytes } from '../../utils/format';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 export interface ModelPickerGroupProps {
   group: ModelGroup;
@@ -169,16 +170,6 @@ const FavStar = styled.button<{ $active: boolean }>`
   }
 `;
 
-const InfoBtn = styled.button`
-  all: unset;
-  cursor: pointer;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textMuted};
-  &:hover {
-    color: ${({ theme }) => theme.colors.text};
-  }
-`;
-
 const DownloadIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -218,6 +209,51 @@ const VariantRow = styled.div`
 
 /* ---------- component ---------- */
 
+function ModelGroupInfo({ group }: { group: ModelGroup }) {
+  const v = group.smallestVariant;
+  return (
+    <div style={{ minWidth: 220 }}>
+      <div style={{ color: '#FFD700', fontWeight: 600, marginBottom: 6 }}>
+        {group.name}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px' }}>
+        {v.family && (
+          <>
+            <span style={{ color: 'rgba(255,255,255,0.45)' }}>Family</span>
+            <span>{v.family}</span>
+          </>
+        )}
+        <span style={{ color: 'rgba(255,255,255,0.45)' }}>Variants</span>
+        <span>{group.variants.length}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)' }}>Smallest</span>
+        <span>{v.storage_size_megabytes ? formatBytes(v.storage_size_megabytes * 1024 * 1024) : '—'}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)' }}>Tensor parallel</span>
+        <span style={{ color: v.supports_tensor ? '#4ade80' : 'rgba(255,255,255,0.7)' }}>
+          {v.supports_tensor ? 'Yes' : 'No'}
+        </span>
+        {group.capabilities.length > 0 && (
+          <>
+            <span style={{ color: 'rgba(255,255,255,0.45)' }}>Capabilities</span>
+            <span>{group.capabilities.join(', ')}</span>
+          </>
+        )}
+      </div>
+      {group.hasMultipleVariants && (
+        <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 6 }}>
+          <div style={{ color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Quantizations
+          </div>
+          {group.variants.map((variant) => (
+            <div key={variant.id} style={{ color: 'rgba(255,255,255,0.6)' }}>
+              {variant.quantization || '—'} · {variant.storage_size_megabytes ? formatBytes(variant.storage_size_megabytes * 1024 * 1024) : '—'}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModelPickerGroup({
   group,
   isExpanded,
@@ -229,11 +265,11 @@ export function ModelPickerGroup({
   onToggleExpand,
   onSelectModel,
   onToggleFavorite,
-  onShowInfo,
+  onShowInfo: _onShowInfo,
   downloadStatusMap,
   launchedAt,
   instanceStatuses,
-  mode = 'launch',
+  mode: _mode = 'launch',
 }: ModelPickerGroupProps) {
   const { variants, hasMultipleVariants } = group;
   const singleVariant = !hasMultipleVariants ? variants[0] : null;
@@ -328,17 +364,14 @@ export function ModelPickerGroup({
         </FavStar>
 
         {/* Info */}
-        {onShowInfo && (
-          <InfoBtn
-            onClick={(e) => {
-              e.stopPropagation();
-              onShowInfo(group);
-            }}
-            title="Model info"
-          >
-            ⓘ
-          </InfoBtn>
-        )}
+        <span onClick={(e) => e.stopPropagation()}>
+          <InfoTooltip
+            filled
+            placement="right"
+            delay={100}
+            content={<ModelGroupInfo group={group} />}
+          />
+        </span>
       </Row>
 
       {/* Expanded variants */}
