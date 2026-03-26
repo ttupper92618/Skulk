@@ -10,7 +10,7 @@ import { Button } from '../common/Button';
 export interface StoreRegistryEntry {
   model_id: string;
   total_bytes: number;
-  files: Array<{ name: string }>;
+  files: string[];
   downloaded_at: string;
 }
 
