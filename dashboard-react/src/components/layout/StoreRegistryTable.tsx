@@ -212,11 +212,38 @@ const ActionsCell = styled.div`
    Component
    ================================================================ */
 
+const LinkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
+
 function ModelInfoContent({ entry }: { entry: StoreRegistryEntry }) {
+  const hfUrl = entry.model_id.includes('/')
+    ? `https://huggingface.co/${entry.model_id}`
+    : null;
+
   return (
     <div style={{ minWidth: 240 }}>
-      <div style={{ color: '#FFD700', fontWeight: 600, marginBottom: 6 }}>
-        {entry.model_id}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ color: '#FFD700', fontWeight: 600 }}>
+          {entry.model_id}
+        </span>
+        {hfUrl && (
+          <a
+            href={hfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'rgba(255,255,255,0.5)', display: 'flex', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#FFD700'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+            title="Open on HuggingFace"
+          >
+            <LinkIcon />
+          </a>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px' }}>
         <span style={{ color: 'rgba(255,255,255,0.45)' }}>Size</span>
