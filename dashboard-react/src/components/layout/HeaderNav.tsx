@@ -73,7 +73,7 @@ const LogoBtn = styled.button<{ $disabled: boolean }>`
 `;
 
 const LogoText = styled.span`
-  font-size: 24px;
+  font-size: ${({ theme }) => theme.fontSizes.xxl};
   font-weight: 700;
   font-family: ${({ theme }) => theme.fonts.mono};
   color: #FFD700;

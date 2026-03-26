@@ -90,7 +90,7 @@ const EmptyBox = styled.div`
   background: rgba(0, 0, 0, 0.3);
   padding: 24px;
   text-align: center;
-  font-size: 13px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-family: ${({ theme }) => theme.fonts.mono};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
@@ -151,7 +151,7 @@ const ActiveBadge = styled.span`
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
   font-family: ${({ theme }) => theme.fonts.mono};
   text-transform: uppercase;
   color: #4ade80;
@@ -193,7 +193,7 @@ const ProgressFill = styled.div<{ $pct: number }>`
 `;
 
 const ProgressText = styled.span`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   font-family: ${({ theme }) => theme.fonts.mono};
   color: #FFD700;
 `;

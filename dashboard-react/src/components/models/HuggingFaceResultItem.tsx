@@ -36,7 +36,7 @@ const Info = styled.div`
 `;
 
 const ModelName = styled.div`
-  font-size: 13px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text};
   white-space: nowrap;
@@ -45,12 +45,12 @@ const ModelName = styled.div`
 `;
 
 const Author = styled.div`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const StatBadge = styled.span`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   color: ${({ theme }) => theme.colors.textSecondary};
   display: flex;
   align-items: center;
@@ -58,7 +58,7 @@ const StatBadge = styled.span`
 `;
 
 const AddedBadge = styled.span`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   padding: 2px 8px;
   border-radius: ${({ theme }) => theme.radii.sm};
   background: rgba(34, 197, 94, 0.15);

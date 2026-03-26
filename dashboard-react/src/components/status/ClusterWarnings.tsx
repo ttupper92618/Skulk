@@ -153,7 +153,7 @@ const WarningPill = styled.div<{ $color: ColorKey }>`
 
 const WarningLabel = styled.span<{ $color: ColorKey }>`
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ $color }) => colorMap[$color].text};
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -214,7 +214,7 @@ const Tooltip = styled.div<{ $color: ColorKey }>`
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 
   p {
-    font-size: 11px;
+    font-size: ${({ theme }) => theme.fontSizes.label};
     color: rgba(255, 255, 255, 0.8);
     margin: 0 0 8px;
     line-height: 1.5;
@@ -229,7 +229,7 @@ const NodeList = styled.ul`
   list-style: none;
   padding: 0;
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   color: rgba(255, 255, 255, 0.6);
 
   li {
@@ -243,5 +243,5 @@ const Emphasis = styled.span<{ $color: ColorKey }>`
 
 const Code = styled.code`
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 10px;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
 `;

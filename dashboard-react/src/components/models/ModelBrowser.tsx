@@ -82,7 +82,7 @@ const ListArea = styled.div`
 `;
 
 const SectionHeader = styled.div`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -94,7 +94,7 @@ const EmptyMsg = styled.div`
   padding: 24px;
   text-align: center;
   color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 13px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
 `;
 
 const FilterIcon = () => (

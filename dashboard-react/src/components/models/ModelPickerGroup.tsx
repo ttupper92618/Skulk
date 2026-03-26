@@ -114,7 +114,7 @@ const Row = styled.div<{ $disabled: boolean; $highlighted: boolean }>`
 `;
 
 const Chevron = styled.span<{ $open: boolean }>`
-  font-size: 10px;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
   color: ${({ theme }) => theme.colors.textMuted};
   transition: transform 0.15s;
   width: 14px;
@@ -124,7 +124,7 @@ const Chevron = styled.span<{ $open: boolean }>`
 
 const Name = styled.span`
   flex: 1;
-  font-size: 13px;
+  font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text};
   white-space: nowrap;
@@ -133,12 +133,12 @@ const Name = styled.span`
 `;
 
 const Caps = styled.span`
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   margin-left: 4px;
 `;
 
 const Badge = styled.span<{ $color?: string }>`
-  font-size: 11px;
+  font-size: ${({ theme }) => theme.fontSizes.label};
   padding: 2px 6px;
   border-radius: ${({ theme }) => theme.radii.sm};
   background: ${({ theme }) => theme.colors.surfaceHover};
@@ -161,7 +161,7 @@ const StatusDot = styled.span<{ $class: string }>`
 const FavStar = styled.button<{ $active: boolean }>`
   all: unset;
   cursor: pointer;
-  font-size: 14px;
+  font-size: ${({ theme }) => theme.fontSizes.md};
   color: ${({ $active }) => ($active ? '#fbbf24' : '#555')};
   transition: color 0.15s;
   &:hover {
@@ -172,7 +172,7 @@ const FavStar = styled.button<{ $active: boolean }>`
 const InfoBtn = styled.button`
   all: unset;
   cursor: pointer;
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textMuted};
   &:hover {
     color: ${({ theme }) => theme.colors.text};
@@ -207,7 +207,7 @@ const VariantRow = styled.div`
   padding: 6px 12px;
   border-radius: ${({ theme }) => theme.radii.sm};
   cursor: pointer;
-  font-size: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textSecondary};
   transition: background 0.15s;
 
