@@ -19,6 +19,7 @@ export function ModelSearchModal({
 }: ModelSearchModalProps) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const [hfResults, setHfResults] = useState<HuggingFaceModel[]>([]);
   const [hfTrending, setHfTrending] = useState<HuggingFaceModel[]>([]);
   const [hfSearching, setHfSearching] = useState(false);
@@ -69,6 +70,7 @@ export function ModelSearchModal({
       });
       if (res.ok) {
         addToast({ type: 'success', message: `Downloading ${modelId} to store` });
+        setRecentIds((prev) => [modelId, ...prev.filter((id) => id !== modelId)]);
         onDownloadStarted();
       } else {
         addToast({ type: 'error', message: `Failed to start download for ${modelId}` });
@@ -125,6 +127,7 @@ export function ModelSearchModal({
             models={models}
             selectedModelId={null}
             favorites={favorites}
+            recentModelIds={recentIds}
             existingModelIds={existingModelIds}
             canModelFit={() => true}
             getModelFitStatus={() => 'fits_now'}
