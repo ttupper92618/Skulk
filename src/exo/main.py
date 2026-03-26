@@ -22,7 +22,8 @@ from exo.routing.router import Router, get_node_id_keypair
 from exo.shared.constants import EXO_LOG
 from exo.shared.election import Election, ElectionResult
 from exo.shared.logging import logger_cleanup, logger_setup
-from exo.shared.types.common import NodeId, SessionId
+from exo.shared.types.commands import ForwarderDownloadCommand, SyncConfig
+from exo.shared.types.common import NodeId, SessionId, SystemId
 from exo.store.config import ExoConfig, load_exo_config, resolve_node_staging
 from exo.store.model_store import ModelStore
 from exo.store.model_store_client import ModelStoreClient, ModelStoreDownloader
@@ -275,6 +276,56 @@ class Node:
             sys.exit(1)
         self._tg.cancel_tasks()
 
+    async def _broadcast_config_if_store_host(self) -> None:
+        """If this node is the store host, broadcast a valid config to all nodes.
+
+        Fixes up ``store_http_host`` so that worker nodes receive a reachable
+        address (the store host's hostname) rather than ``127.0.0.1`` or None.
+        """
+        if self.exo_config is None or self.exo_config.model_store is None:
+            return
+        ms = self.exo_config.model_store
+        if not ms.enabled:
+            return
+        local_hostname = socket.gethostname()
+        is_store_host = ms.store_host in (str(self.node_id), local_hostname)
+        if not is_store_host:
+            return
+
+        # Fix up store_http_host to be reachable by other nodes
+        reachable_host = local_hostname
+        if ms.store_http_host and ms.store_http_host not in (
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        ):
+            reachable_host = ms.store_http_host
+
+        config_dict = self.exo_config.model_dump()
+        config_dict["model_store"]["store_http_host"] = reachable_host
+
+        import yaml
+
+        config_yaml = yaml.safe_dump(
+            config_dict, default_flow_style=False, sort_keys=False
+        )
+
+        # Also update local exo.yaml with the fixed host
+        try:
+            Path("exo.yaml").write_text(config_yaml)
+        except Exception as exc:
+            logger.warning(f"Failed to update local exo.yaml: {exc}")
+
+        await self.router.sender(topics.DOWNLOAD_COMMANDS).send(
+            ForwarderDownloadCommand(
+                origin=SystemId(),
+                command=SyncConfig(config_yaml=config_yaml),
+            )
+        )
+        logger.info(
+            f"ModelStore: broadcast config to cluster (store_http_host={reachable_host})"
+        )
+
     async def _elect_loop(self):
         with self.election_result_receiver as results:
             async for result in results:
@@ -406,6 +457,8 @@ class Node:
                         self._tg.start_soon(self.worker.run)
                     if self.api:
                         self.api.reset(result.won_clock, self.event_router.receiver())
+                    # Broadcast config to cluster so worker nodes get the right store address
+                    await self._broadcast_config_if_store_host()
                 else:
                     if self.api:
                         self.api.unpause(result.won_clock)
