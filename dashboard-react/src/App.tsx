@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { ThemeProvider } from 'styled-components';
 import { theme, GlobalStyle } from './theme';
 import { useClusterState } from './hooks/useClusterState';
-import { HeaderNav } from './components/layout/HeaderNav';
+import { HeaderNav, type NavRoute } from './components/layout/HeaderNav';
 import { TopologyGraph } from './components/topology/TopologyGraph';
 import { ClusterWarnings } from './components/status/ClusterWarnings';
 import { ConnectionBanner } from './components/status/ConnectionBanner';
@@ -27,6 +27,12 @@ const Main = styled.main`
 export function App() {
   const { topology, connected } = useClusterState();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeRoute, setActiveRoute] = useState<NavRoute>('home');
+
+  const handleNavigate = (route: NavRoute) => {
+    setActiveRoute(route);
+    if (route === 'settings') setSettingsOpen(true);
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -36,9 +42,8 @@ export function App() {
         <ConnectionBanner connected={connected} />
         <HeaderNav
           showHome
-          showSidebarToggle
-          sidebarVisible={false}
-          onOpenSettings={() => setSettingsOpen(true)}
+          activeRoute={activeRoute}
+          onNavigate={handleNavigate}
         />
         <ClusterWarnings topology={topology} />
         <Main>
