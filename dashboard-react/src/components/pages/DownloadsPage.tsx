@@ -269,8 +269,8 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
 
   return (
     <Container>
-      <TopBar>
-        {storeAvailable && (
+      {storeAvailable && (
+        <TopBar>
           <SegmentedToggle>
             <SegmentBtn $active={activeTab === 'nodes'} onClick={() => setTab('nodes')}>
               Node Downloads
@@ -279,20 +279,8 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
               Store Registry
             </SegmentBtn>
           </SegmentedToggle>
-        )}
-        <ActionButtons>
-          {storeAvailable && (
-            <Button variant="danger" size="sm" onClick={() => setPurgeConfirm(true)}>
-              <TrashIcon /> Purge All Node Caches
-            </Button>
-          )}
-          {storeAvailable && activeTab === 'store' && (
-            <Button variant="primary" size="md" onClick={handleFindModels}>
-              <SearchIcon /> Find Models
-            </Button>
-          )}
-        </ActionButtons>
-      </TopBar>
+        </TopBar>
+      )}
 
       {purgeConfirm && (
         <PurgeModal>
@@ -363,6 +351,16 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
           entries={storeEntries}
           loading={storeLoading}
           modelCards={modelCards}
+          actions={
+            <>
+              <Button variant="danger" size="sm" onClick={() => setPurgeConfirm(true)}>
+                <TrashIcon /> Purge Node Caches
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleFindModels}>
+                <SearchIcon /> Find Models
+              </Button>
+            </>
+          }
           onRefresh={loadRegistry}
           onDelete={() => {}}
         />
@@ -425,17 +423,8 @@ const Container = styled.div`
 
 const TopBar = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 20px;
-  gap: 12px;
-`;
-
-const ActionButtons = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
 `;
 
 const PurgeModal = styled.div`

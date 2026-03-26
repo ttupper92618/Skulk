@@ -35,6 +35,7 @@ export interface StoreRegistryTableProps {
   loading?: boolean;
   activeModelIds?: string[];
   modelCards?: Record<string, ModelCardInfo>;
+  actions?: React.ReactNode;
   onRefresh: () => void;
   onDelete: (entry: StoreRegistryEntry, isActive: boolean) => void;
 }
@@ -76,6 +77,12 @@ const HeaderRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+`;
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
 `;
 
 const HeaderText = styled.span`
@@ -312,6 +319,7 @@ export function StoreRegistryTable({
   loading = false,
   activeModelIds = [],
   modelCards = {},
+  actions,
   onRefresh,
   onDelete,
 }: StoreRegistryTableProps) {
@@ -336,7 +344,10 @@ export function StoreRegistryTable({
           {entries.length} model{entries.length !== 1 ? 's' : ''} in store
           {downloadingCount > 0 && `, ${downloadingCount} downloading`}
         </HeaderText>
-        <Button variant="outline" size="sm" onClick={onRefresh}>Refresh</Button>
+        <HeaderActions>
+          {actions}
+          <Button variant="outline" size="sm" onClick={onRefresh}>Refresh</Button>
+        </HeaderActions>
       </HeaderRow>
 
       {loading ? (
