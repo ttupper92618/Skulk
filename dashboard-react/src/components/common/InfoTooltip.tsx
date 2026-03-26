@@ -11,6 +11,7 @@ import {
   useDismiss,
   useRole,
   useInteractions,
+  safePolygon,
   FloatingPortal,
   FloatingArrow,
   type Placement,
@@ -92,7 +93,10 @@ export function InfoTooltip({
     ],
   });
 
-  const hover = useHover(context, { delay: { open: delay, close: 0 } });
+  const hover = useHover(context, {
+    delay: { open: delay, close: 150 },
+    handleClose: safePolygon({ blockPointerEvents: false }),
+  });
   const focus = useFocus(context);
   const dismiss = useDismiss(context);
   const role = useRole(context, { role: 'tooltip' });
