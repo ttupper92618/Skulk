@@ -10,7 +10,6 @@ interface DownloadsPageProps {
   topology: TopologyData | null;
   downloads: RawDownloads;
   nodeDisk: NodeDiskInfo;
-  lastUpdate: number | null;
 }
 
 /* ── Data extraction helpers ──────────────────────────── */
@@ -147,7 +146,7 @@ function formatSpeed(bps: number): string {
 
 /* ── Component ────────────────────────────────────────── */
 
-export function DownloadsPage({ topology, downloads, nodeDisk, lastUpdate }: DownloadsPageProps) {
+export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPageProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [storeAvailable, setStoreAvailable] = useState(false);
   const [storeEntries, setStoreEntries] = useState<StoreRegistryEntry[]>([]);
@@ -194,25 +193,17 @@ export function DownloadsPage({ topology, downloads, nodeDisk, lastUpdate }: Dow
 
   return (
     <Container>
-      <Header>
-        <div>
-          <Title>DOWNLOADS</Title>
-          <Subtitle>Overview of models on each node</Subtitle>
-        </div>
-        <LastUpdate>
-          Last update: {lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : '--'}
-        </LastUpdate>
-      </Header>
-
       {storeAvailable && (
-        <SegmentedToggle>
-          <SegmentBtn $active={activeTab === 'nodes'} onClick={() => setTab('nodes')}>
-            Node Downloads
-          </SegmentBtn>
-          <SegmentBtn $active={activeTab === 'store'} onClick={() => setTab('store')}>
-            Store Registry
-          </SegmentBtn>
-        </SegmentedToggle>
+        <TopBar>
+          <SegmentedToggle>
+            <SegmentBtn $active={activeTab === 'nodes'} onClick={() => setTab('nodes')}>
+              Node Downloads
+            </SegmentBtn>
+            <SegmentBtn $active={activeTab === 'store'} onClick={() => setTab('store')}>
+              Store Registry
+            </SegmentBtn>
+          </SegmentedToggle>
+        </TopBar>
       )}
 
       {activeTab === 'nodes' ? (
@@ -319,35 +310,10 @@ const Container = styled.div`
   overflow-y: auto;
 `;
 
-const Header = styled.div`
+const TopBar = styled.div`
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  position: relative;
-`;
-
-const Title = styled.h1`
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 28px;
-  font-weight: 700;
-  color: #FFD700;
-  margin: 0;
-  letter-spacing: 2px;
-`;
-
-const Subtitle = styled.p`
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin: 4px 0 0;
-`;
-
-const LastUpdate = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  white-space: nowrap;
+  justify-content: flex-end;
+  margin-bottom: 20px;
 `;
 
 const SegmentedToggle = styled.div`
