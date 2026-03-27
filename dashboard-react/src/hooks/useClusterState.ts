@@ -213,7 +213,7 @@ const POLL_INTERVAL = 1000;
 export type RawDownloads = Record<string, unknown[]>;
 export type NodeDiskInfo = Record<string, { total: { inBytes: number }; available: { inBytes: number } }>;
 
-export type RawInstances = Record<string, { MlxRingInstance?: { shard_assignments?: { model_id?: string } }; MlxJacclInstance?: { shard_assignments?: { model_id?: string } } }>;
+export type RawInstances = Record<string, { MlxRingInstance?: { shardAssignments?: { modelId?: string } }; MlxJacclInstance?: { shardAssignments?: { modelId?: string } } }>;
 
 export interface ClusterState {
   topology: TopologyData | null;

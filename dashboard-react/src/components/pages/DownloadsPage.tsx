@@ -317,8 +317,8 @@ export function DownloadsPage({ topology, downloads, nodeDisk, instances }: Down
     const ids: string[] = [];
     for (const inst of Object.values(instances)) {
       const modelId =
-        inst.MlxRingInstance?.shard_assignments?.model_id ??
-        inst.MlxJacclInstance?.shard_assignments?.model_id;
+        inst.MlxRingInstance?.shardAssignments?.modelId ??
+        inst.MlxJacclInstance?.shardAssignments?.modelId;
       if (modelId) ids.push(modelId);
     }
     return ids;
