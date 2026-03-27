@@ -213,9 +213,13 @@ export function ModelBrowser({
                 <HuggingFaceResultItem
                   key={m.id}
                   model={m}
-                  isAdded={existingModelIds.has(m.id)}
+                  isAdded={models.some((mod) => mod.id === m.id)}
+                  isInStore={existingModelIds.has(m.id)}
                   isAdding={false}
-                  onAdd={() => onAddModel?.(m.id)}
+                  onAdd={async () => {
+                    await onAddModel?.(m.id);
+                    onSelect(m.id);
+                  }}
                   onSelect={() => onSelect(m.id)}
                 />
               ))}

@@ -6,6 +6,7 @@ export interface HuggingFaceResultItemProps {
   model: HuggingFaceModel;
   isAdded: boolean;
   isAdding: boolean;
+  isInStore?: boolean;
   onAdd: () => void;
   onSelect: () => void;
   downloadedOnNodes?: string[];
@@ -58,6 +59,9 @@ const StatBadge = styled.span`
 `;
 
 const AddedBadge = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: ${({ theme }) => theme.fontSizes.label};
   padding: 2px 8px;
   border-radius: ${({ theme }) => theme.radii.sm};
@@ -71,9 +75,17 @@ const SelectBtn = styled(Button)`
   &:hover:not(:disabled) { background: rgba(255, 215, 0, 0.25); }
 `;
 
-const DownloadIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
     <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const StoreDownloadIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
@@ -81,9 +93,9 @@ export function HuggingFaceResultItem({
   model,
   isAdded,
   isAdding,
+  isInStore = false,
   onAdd,
   onSelect,
-  downloadedOnNodes,
 }: HuggingFaceResultItemProps) {
   const shortName = model.id.startsWith('mlx-community/')
     ? model.id.replace('mlx-community/', '')
@@ -100,20 +112,16 @@ export function HuggingFaceResultItem({
       <StatBadge title="Downloads">↓ {formatCount(model.downloads)}</StatBadge>
       <StatBadge title="Likes">♥ {formatCount(model.likes)}</StatBadge>
 
-      {/* Downloaded on nodes */}
-      {downloadedOnNodes && downloadedOnNodes.length > 0 && <DownloadIcon />}
-
-      {/* Added badge or action */}
-      {isAdded ? (
-        <>
-          <AddedBadge>Added</AddedBadge>
-          <SelectBtn variant="primary" size="sm" onClick={onSelect}>
-            Select
-          </SelectBtn>
-        </>
+      {/* Action */}
+      {isInStore ? (
+        <AddedBadge><CheckIcon /> In Store</AddedBadge>
+      ) : isAdded ? (
+        <SelectBtn variant="primary" size="sm" onClick={onSelect}>
+          <StoreDownloadIcon /> Download
+        </SelectBtn>
       ) : (
         <Button variant="outline" size="sm" onClick={onAdd} disabled={isAdding}>
-          {isAdding ? '…' : '+ Add'}
+          {isAdding ? '…' : <><StoreDownloadIcon /> Add & Download</>}
         </Button>
       )}
     </Row>
