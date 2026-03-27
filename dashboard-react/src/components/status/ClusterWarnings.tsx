@@ -52,7 +52,7 @@ export function ClusterWarnings({ topology }: ClusterWarningsProps) {
       {showVersion && (
         <WarningPill $color="error">
           <WarningIcon d={WARNING_ICON} $color="error" />
-          <WarningLabel $color="error">EXO VERSION MISMATCH</WarningLabel>
+          <WarningLabel $color="error">VERSION MISMATCH</WarningLabel>
           <DismissButton $color="error" onClick={() => setVersionDismissed(true)} aria-label="Dismiss">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d={CLOSE_ICON} />
@@ -61,7 +61,7 @@ export function ClusterWarnings({ topology }: ClusterWarningsProps) {
           <Tooltip className="warning-tooltip" $color="error">
             <TooltipInner $color="error">
               <p>
-                Nodes in this cluster are running different versions of exo.
+                Nodes in this cluster are running different versions.
                 This will cause inference failures and unexpected behavior.
               </p>
               <NodeList>

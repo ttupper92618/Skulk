@@ -392,7 +392,7 @@ export function ChatMessages({
             {msg.role === 'assistant' ? (
               <>
                 <Dot $color="#FFD700" />
-                <RoleLabel $role="assistant">EXO</RoleLabel>
+                <RoleLabel $role="assistant">SKULK</RoleLabel>
                 <Timestamp>{formatTime(msg.timestamp)}</Timestamp>
                 {msg.ttftMs != null && <StatLabel>TTFT <span>{Math.round(msg.ttftMs)}ms</span></StatLabel>}
                 {msg.tps != null && <StatLabel>TPS <span>{msg.tps.toFixed(1)}</span></StatLabel>}
@@ -527,7 +527,7 @@ export function ChatMessages({
         <MessageCard $role="assistant">
           <MsgHeader>
             <Dot $color="#FFD700" />
-            <RoleLabel $role="assistant">EXO</RoleLabel>
+            <RoleLabel $role="assistant">SKULK</RoleLabel>
           </MsgHeader>
           <MarkdownContent content={streamingContent} />
           <Cursor />
