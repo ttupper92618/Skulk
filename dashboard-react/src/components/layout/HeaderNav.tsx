@@ -220,7 +220,7 @@ export function HeaderNav({
           </ToggleBtn>
         )}
         <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('home') : undefined}>
-          <LogoText>FoxmemEX0</LogoText>
+          <LogoText>Skulk</LogoText>
         </LogoBtn>
       </LeftGroup>
 
