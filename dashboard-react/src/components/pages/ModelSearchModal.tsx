@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ModelBrowser } from '../models/ModelBrowser';
-import type { ModelInfo, HuggingFaceModel } from '../../types/models';
+import type { ModelInfo, HuggingFaceModel, DownloadAvailability } from '../../types/models';
 import { addToast } from '../../hooks/useToast';
 
 interface ModelSearchModalProps {
@@ -108,6 +108,15 @@ export function ModelSearchModal({
     });
   }, []);
 
+  // Build a download status map so models already in store show a checkmark
+  const storeDownloadMap = useMemo(() => {
+    const map = new Map<string, DownloadAvailability>();
+    for (const id of existingModelIds) {
+      map.set(id, { available: true, nodeNames: ['store'], nodeIds: [] });
+    }
+    return map;
+  }, [existingModelIds]);
+
   if (!open) return null;
 
   return (
@@ -129,6 +138,7 @@ export function ModelSearchModal({
             favorites={favorites}
             recentModelIds={recentIds}
             existingModelIds={existingModelIds}
+            downloadStatusMap={storeDownloadMap}
             canModelFit={() => true}
             getModelFitStatus={() => 'fits_now'}
             onSelect={handleSelect}
