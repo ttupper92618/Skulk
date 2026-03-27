@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css } from 'styled-components';
 import type { TopologyData } from '../../types/topology';
 import type { RawDownloads, NodeDiskInfo } from '../../hooks/useClusterState';
-import { StoreRegistryTable, type StoreRegistryEntry, type ModelCardInfo } from '../layout/StoreRegistryTable';
+import { StoreRegistryTable, type StoreRegistryEntry, type StoreDownloadProgress, type ModelCardInfo } from '../layout/StoreRegistryTable';
 import { ModelSearchModal } from './ModelSearchModal';
 import { Button } from '../common/Button';
 import { addToast } from '../../hooks/useToast';
@@ -167,7 +167,9 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
   const [tab, setTab] = useState<Tab | null>(null);
   const [storeAvailable, setStoreAvailable] = useState(false);
   const [storeEntries, setStoreEntries] = useState<StoreRegistryEntry[]>([]);
+  const [storeDownloads, setStoreDownloads] = useState<StoreDownloadProgress[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   const { rows, columns } = useMemo(
     () => buildGrid(downloads, topology, nodeDisk),
@@ -205,16 +207,50 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
     return cards;
   }, [downloads]);
 
+  const fetchDownloads = useCallback(async () => {
+    try {
+      const res = await fetch('/store/downloads');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.downloads ?? []) as StoreDownloadProgress[];
+    } catch { return []; }
+  }, []);
+
   const loadRegistry = useCallback(async () => {
     setStoreLoading(true);
     try {
-      const res = await fetch('/store/registry');
-      if (!res.ok) return;
-      const data = await res.json();
-      setStoreEntries(data.entries ?? []);
+      const [regRes, dls] = await Promise.all([
+        fetch('/store/registry'),
+        fetchDownloads(),
+      ]);
+      if (regRes.ok) {
+        const data = await regRes.json();
+        setStoreEntries(data.entries ?? []);
+      }
+      setStoreDownloads(dls);
+
+      // Start polling if active downloads
+      if (dls.length > 0 && !pollRef.current) {
+        pollRef.current = setInterval(async () => {
+          const [newDls, regRefresh] = await Promise.all([
+            fetchDownloads(),
+            fetch('/store/registry'),
+          ]);
+          setStoreDownloads(newDls);
+          if (regRefresh.ok) {
+            const d = await regRefresh.json();
+            setStoreEntries(d.entries ?? []);
+          }
+          // Stop polling when done
+          if (newDls.length === 0 && pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = undefined;
+          }
+        }, 2000);
+      }
     } catch { /* ignore */ }
     finally { setStoreLoading(false); }
-  }, []);
+  }, [fetchDownloads]);
 
   // Detect store availability and set default tab
   useEffect(() => {
@@ -236,6 +272,13 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
   useEffect(() => {
     if (tab === 'store') loadRegistry();
   }, [tab, loadRegistry]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const [purgeConfirm, setPurgeConfirm] = useState(false);
   const [purging, setPurging] = useState(false);
@@ -352,6 +395,7 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
       ) : (
         <StoreRegistryTable
           entries={storeEntries}
+          activeDownloads={storeDownloads}
           loading={storeLoading}
           modelCards={modelCards}
           actions={
