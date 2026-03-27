@@ -372,8 +372,8 @@ export function StoreRegistryTable({
               <ModelCell>
                 <ModelId title={dl.modelId}>{dl.modelId}</ModelId>
               </ModelCell>
-              <Cell $align="right">—</Cell>
-              <Cell $align="right">—</Cell>
+              <Cell />
+              <Cell />
               <Cell $align="right">
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   <ProgressTrack>
