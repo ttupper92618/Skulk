@@ -18,7 +18,7 @@ export const theme = {
     info: '#3b82f6',
   },
   fonts: {
-    body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    body: "'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     mono: "'JetBrains Mono', 'Fira Code', monospace",
   },
   fontSizes: {
