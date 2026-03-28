@@ -8,9 +8,7 @@ import { FiTrash2, FiSearch, FiCheck } from 'react-icons/fi';
 import { Button } from '../common/Button';
 import { addToast } from '../../hooks/useToast';
 
-type Tab = 'nodes' | 'store';
-
-interface DownloadsPageProps {
+interface ModelStorePageProps {
   topology: TopologyData | null;
   downloads: RawDownloads;
   nodeDisk: NodeDiskInfo;
@@ -154,18 +152,11 @@ function formatSpeed(bps: number): string {
 
 /* ── Component ────────────────────────────────────────── */
 
-export function DownloadsPage({ topology, downloads, nodeDisk, instances }: DownloadsPageProps) {
-  const [tab, setTab] = useState<Tab | null>(null);
-  const [storeAvailable, setStoreAvailable] = useState(false);
+export function ModelStorePage({ topology, downloads, nodeDisk, instances }: ModelStorePageProps) {
   const [storeEntries, setStoreEntries] = useState<StoreRegistryEntry[]>([]);
   const [storeDownloads, setStoreDownloads] = useState<StoreDownloadProgress[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
-
-  const { rows, columns } = useMemo(
-    () => buildGrid(downloads, topology, nodeDisk),
-    [downloads, topology, nodeDisk],
-  );
 
   // Extract model card info from download data for the store table tooltips
   const modelCards = useMemo<Record<string, ModelCardInfo>>(() => {
@@ -243,26 +234,10 @@ export function DownloadsPage({ topology, downloads, nodeDisk, instances }: Down
     finally { setStoreLoading(false); }
   }, [fetchDownloads]);
 
-  // Detect store availability and set default tab
+  // Load store registry on mount
   useEffect(() => {
-    if (tab !== null) return;
-    (async () => {
-      try {
-        const res = await fetch('/store/health');
-        if (res.ok) {
-          setStoreAvailable(true);
-          setTab('store');
-          return;
-        }
-      } catch { /* ignore */ }
-      setTab('nodes');
-    })();
-  }, [tab]);
-
-  // Load store registry when switching to store tab
-  useEffect(() => {
-    if (tab === 'store') loadRegistry();
-  }, [tab, loadRegistry]);
+    loadRegistry();
+  }, [loadRegistry]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -358,23 +333,8 @@ export function DownloadsPage({ topology, downloads, nodeDisk, instances }: Down
     }
   }, [modelToInstanceId]);
 
-  const activeTab = tab ?? 'nodes';
-
   return (
     <Container>
-      {storeAvailable && (
-        <TopBar>
-          <SegmentedToggle>
-            <SegmentBtn $active={activeTab === 'nodes'} onClick={() => setTab('nodes')}>
-              Node Downloads
-            </SegmentBtn>
-            <SegmentBtn $active={activeTab === 'store'} onClick={() => setTab('store')}>
-              Store Registry
-            </SegmentBtn>
-          </SegmentedToggle>
-        </TopBar>
-      )}
-
       {purgeConfirm && (
         <PurgeModal>
           <ModalBackdrop onClick={() => setPurgeConfirm(false)} />
@@ -400,47 +360,7 @@ export function DownloadsPage({ topology, downloads, nodeDisk, instances }: Down
         </PurgeModal>
       )}
 
-      {activeTab === 'nodes' ? (
-        rows.length === 0 ? (
-          <EmptyState>
-            No downloads found. Start a model download to see progress here.
-          </EmptyState>
-        ) : (
-          <TableWrap>
-            <Table>
-              <thead>
-                <tr>
-                  <ModelHeader>MODEL</ModelHeader>
-                  {columns.map((col) => (
-                    <NodeHeader key={col.nodeId}>
-                      <NodeName>{col.label.toUpperCase()}</NodeName>
-                      {col.diskFreeBytes != null && (
-                        <DiskFree>{formatBytes(col.diskFreeBytes)} free</DiskFree>
-                      )}
-                    </NodeHeader>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.modelId}>
-                    <ModelCell>{row.modelId}</ModelCell>
-                    {columns.map((col) => {
-                      const cell = row.cells[col.nodeId];
-                      return (
-                        <StatusCell key={col.nodeId}>
-                          {cell ? <CellContent cell={cell} /> : <NotPresent>--</NotPresent>}
-                        </StatusCell>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )
-      ) : (
-        <StoreRegistryTable
+      <StoreRegistryTable
           entries={storeEntries}
           activeDownloads={storeDownloads}
           loading={storeLoading}
@@ -461,7 +381,6 @@ export function DownloadsPage({ topology, downloads, nodeDisk, instances }: Down
           onLaunch={handleLaunch}
           onStop={handleStop}
         />
-      )}
       <ModelSearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}

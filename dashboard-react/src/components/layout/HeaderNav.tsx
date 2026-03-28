@@ -1,9 +1,10 @@
 import styled, { css } from 'styled-components';
-import { FiHome, FiDownload, FiSettings, FiMenu, FiX, FiSidebar } from 'react-icons/fi';
+import { FiSettings, FiMenu, FiX, FiSidebar, FiDatabase } from 'react-icons/fi';
+import { MdHub } from 'react-icons/md';
 import { MdOutlineViewSidebar } from 'react-icons/md';
 import { Button } from '../common/Button';
 
-export type NavRoute = 'home' | 'downloads';
+export type NavRoute = 'cluster' | 'model-store';
 
 export interface HeaderNavProps {
   showHome?: boolean;
@@ -117,8 +118,8 @@ const MenuIcon = () => <FiMenu size={18} />;
 const CloseIcon = () => <FiX size={18} />;
 const SidebarIcon = () => <FiSidebar size={18} />;
 const PanelIcon = () => <MdOutlineViewSidebar size={18} />;
-const DownloadIcon = () => <FiDownload size={16} />;
-const HomeIcon = () => <FiHome size={16} />;
+const ClusterIcon = () => <MdHub size={16} />;
+const StoreIcon = () => <FiDatabase size={16} />;
 const SettingsIcon = () => <FiSettings size={16} />;
 
 function ProgressCircle({ count, percentage }: { count: number; percentage: number }) {
@@ -151,7 +152,7 @@ function ProgressCircle({ count, percentage }: { count: number; percentage: numb
 export function HeaderNav({
   showHome = true,
   onHome,
-  activeRoute = 'home',
+  activeRoute = 'cluster',
   onNavigate,
   showSidebarToggle = false,
   sidebarVisible = true,
@@ -168,7 +169,7 @@ export function HeaderNav({
 }: HeaderNavProps) {
   const navigate = (route: NavRoute) => {
     onNavigate?.(route);
-    if (route === 'home') onHome?.();
+    if (route === 'cluster') onHome?.();
   };
 
   return (
@@ -184,7 +185,7 @@ export function HeaderNav({
             <SidebarIcon />
           </ToggleBtn>
         )}
-        <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('home') : undefined}>
+        <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('cluster') : undefined}>
           <LogoText>Skulk</LogoText>
         </LogoBtn>
       </LeftGroup>
@@ -192,12 +193,12 @@ export function HeaderNav({
       <RightGroup>
         {downloadProgress && <ProgressCircle count={downloadProgress.count} percentage={downloadProgress.percentage} />}
 
-        <NavLink $active={activeRoute === 'home'} onClick={() => navigate('home')}>
-          <HomeIcon /> Home
+        <NavLink $active={activeRoute === 'cluster'} onClick={() => navigate('cluster')}>
+          <ClusterIcon /> Cluster
         </NavLink>
 
-        <NavLink $active={activeRoute === 'downloads'} onClick={() => navigate('downloads')}>
-          <DownloadIcon /> Downloads
+        <NavLink $active={activeRoute === 'model-store'} onClick={() => navigate('model-store')}>
+          <StoreIcon /> Model Store
         </NavLink>
 
         <Button variant="ghost" size="lg" icon onClick={() => onOpenSettings?.()} aria-label="Settings">
