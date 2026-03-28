@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FiExternalLink } from 'react-icons/fi';
 import { MdPlayArrow } from 'react-icons/md';
+import { DeviceIcon } from '../topology/DeviceIcon';
 
 /* ── Types ────────────────────────────────────────────── */
 
@@ -46,19 +47,25 @@ function hfUrl(modelId: string): string | null {
 
 function MiniTopology({ nodes }: { nodes: ClusterCardNode[] }) {
   const count = nodes.length;
-  const w = 200;
-  const h = 140;
+  const iconW = 48;
+  const iconH = 40;
+  const w = 240;
+  const h = count === 1 ? 80 : 160;
   const cx = w / 2;
   const cy = h / 2;
-  const r = Math.min(w, h) * 0.35;
+  const r = count <= 2 ? 50 : Math.min(w, h) * 0.32;
 
   const positions = useMemo(() => {
-    if (count === 1) return [{ x: cx, y: cy }];
+    if (count === 1) return [{ x: cx, y: cy - 8 }];
+    if (count === 2) return [
+      { x: cx - r, y: cy - 8 },
+      { x: cx + r, y: cy - 8 },
+    ];
     return nodes.map((_, i) => {
       const angle = -Math.PI / 2 + (2 * Math.PI * i) / count;
-      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) - 4 };
     });
-  }, [count, cx, cy, r]);
+  }, [count, cx, cy, r, nodes.length]);
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
@@ -69,8 +76,8 @@ function MiniTopology({ nodes }: { nodes: ClusterCardNode[] }) {
           <line
             key={`e${i}`}
             x1={p.x} y1={p.y} x2={next.x} y2={next.y}
-            stroke="rgba(255,215,0,0.2)"
-            strokeWidth={1.5}
+            stroke="rgba(255,215,0,0.15)"
+            strokeWidth={1}
             strokeDasharray="4 3"
           />
         );
@@ -78,30 +85,27 @@ function MiniTopology({ nodes }: { nodes: ClusterCardNode[] }) {
       {/* Nodes */}
       {positions.map((p, i) => {
         const node = nodes[i];
-        const pct = node.memoryUsedPercent;
         return (
           <g key={node.nodeId}>
-            {/* Node box */}
-            <rect
-              x={p.x - 20} y={p.y - 14}
-              width={40} height={28}
-              rx={4}
-              fill="rgba(0,0,0,0.5)"
-              stroke="rgba(255,215,0,0.4)"
-              strokeWidth={1.5}
-            />
-            {/* Inner bars (like Mac Mini ports) */}
-            <rect x={p.x - 12} y={p.y - 6} width={8} height={12} rx={1.5} fill="rgba(255,215,0,0.35)" />
-            <rect x={p.x + 4} y={p.y - 6} width={8} height={12} rx={1.5} fill="rgba(255,215,0,0.35)" />
-            {/* Memory percent label */}
+            <g transform={`translate(${p.x - iconW / 2}, ${p.y - iconH / 2})`}>
+              <DeviceIcon
+                model="mac-mini"
+                ramPercent={node.memoryUsedPercent}
+                width={iconW}
+                height={iconH}
+                wireColor="rgba(255,215,0,0.5)"
+                clipId={`cc-${node.nodeId}`}
+              />
+            </g>
+            {/* Memory percent + name */}
             <text
-              x={p.x} y={p.y + 28}
+              x={p.x} y={p.y + iconH / 2 + 14}
               textAnchor="middle"
-              fill="rgba(255,255,255,0.7)"
-              fontSize={12}
+              fill="rgba(255,255,255,0.6)"
+              fontSize={11}
               fontFamily="'Outfit', sans-serif"
             >
-              {pct}%
+              {node.memoryUsedPercent}%
             </text>
           </g>
         );
