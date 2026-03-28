@@ -289,10 +289,10 @@ export function ChatForm({
           )}
           <Spacer />
           {ttftMs != null && (
-            <Stat>TTFT <StatValue>{Math.round(ttftMs)}ms</StatValue></Stat>
+            <Stat>TTFT <StatValue>{ttftMs.toFixed(1)}ms</StatValue></Stat>
           )}
           {tps != null && (
-            <Stat>TPS <StatValue>{tps.toFixed(1)}</StatValue></Stat>
+            <Stat>TPS <StatValue>{tps.toFixed(1)} tok/s</StatValue> ({(1000 / tps).toFixed(1)} ms/tok)</Stat>
           )}
         </HeaderRow>
       )}
