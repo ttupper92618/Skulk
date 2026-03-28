@@ -5,6 +5,7 @@ import { MdPlayArrow, MdClose } from 'react-icons/md';
 import { formatBytes } from '../../utils/format';
 import { Button } from '../common/Button';
 import { InfoTooltip } from '../common/InfoTooltip';
+import { ClusterCard, type ClusterCardProps } from '../cluster/ClusterCard';
 
 /* ================================================================
    Types
@@ -42,6 +43,7 @@ export interface StoreRegistryTableProps {
   onDelete: (entry: StoreRegistryEntry, isActive: boolean) => void;
   onLaunch?: (modelId: string) => void;
   onStop?: (modelId: string) => void;
+  clusterCards?: Record<string, Omit<ClusterCardProps, 'onLaunch'>>;
 }
 
 /* ---- helpers ---- */
@@ -390,6 +392,7 @@ export function StoreRegistryTable({
   onDelete,
   onLaunch,
   onStop,
+  clusterCards = {},
 }: StoreRegistryTableProps) {
   const registeredIds = useMemo(() => new Set(entries.map((e) => e.model_id)), [entries]);
   const pendingDownloads = useMemo(
@@ -478,7 +481,17 @@ export function StoreRegistryTable({
                 <ModelCell>
                   <ModelId title={entry.model_id}>{entry.model_id}</ModelId>
                   {active && (
-                    <ActiveBadge><PulseDot /> Active</ActiveBadge>
+                    clusterCards[entry.model_id] ? (
+                      <InfoTooltip
+                        placement="bottom"
+                        delay={100}
+                        content={<ClusterCard {...clusterCards[entry.model_id]} />}
+                      >
+                        <ActiveBadge><PulseDot /> Active</ActiveBadge>
+                      </InfoTooltip>
+                    ) : (
+                      <ActiveBadge><PulseDot /> Active</ActiveBadge>
+                    )
                   )}
                 </ModelCell>
                 <Cell $align="right">{formatBytes(entry.total_bytes)}</Cell>
