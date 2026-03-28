@@ -180,11 +180,33 @@ const ReadyBadge = styled.span`
   padding: 1px 6px;
 `;
 
+const ActiveBadge = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  font-family: ${({ theme }) => theme.fonts.body};
+  color: ${({ theme }) => theme.colors.gold};
+  background: ${({ theme }) => theme.colors.goldBg};
+  border: 1px solid ${({ theme }) => theme.colors.goldDim};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 1px 6px;
+`;
+
 const PulseDot = styled.span`
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #4ade80;
+  animation: ${pulse} 1.5s ease-in-out infinite;
+`;
+
+const ActiveDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.gold};
   animation: ${pulse} 1.5s ease-in-out infinite;
 `;
 
@@ -480,19 +502,22 @@ export function StoreRegistryTable({
                 </PlayCell>
                 <ModelCell>
                   <ModelId title={entry.model_id}>{entry.model_id}</ModelId>
-                  {active && (
-                    clusterCards[entry.model_id] ? (
+                  {active && (() => {
+                    const card = clusterCards[entry.model_id];
+                    const ready = card?.isReady ?? false;
+                    const badge = ready
+                      ? <ReadyBadge><PulseDot /> Ready</ReadyBadge>
+                      : <ActiveBadge><ActiveDot /> Loading</ActiveBadge>;
+                    return card ? (
                       <InfoTooltip
                         placement="bottom"
                         delay={100}
-                        content={<ClusterCard {...clusterCards[entry.model_id]} />}
+                        content={<ClusterCard {...card} />}
                       >
-                        <ReadyBadge><PulseDot /> Ready</ReadyBadge>
+                        {badge}
                       </InfoTooltip>
-                    ) : (
-                      <ReadyBadge><PulseDot /> Ready</ReadyBadge>
-                    )
-                  )}
+                    ) : badge;
+                  })()}
                 </ModelCell>
                 <Cell $align="right">{formatBytes(entry.total_bytes)}</Cell>
                 <Cell $align="right">{entry.files.length}</Cell>
