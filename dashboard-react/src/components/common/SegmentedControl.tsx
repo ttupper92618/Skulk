@@ -38,9 +38,7 @@ const Segment = styled.button<{
   cursor: pointer;
   padding: ${({ $size }) => sizeConfig[$size].padding};
   font-size: ${({ $size }) => sizeConfig[$size].fontSize};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: ${({ theme }) => theme.fonts.body};
   transition: all 0.15s;
   white-space: nowrap;
 

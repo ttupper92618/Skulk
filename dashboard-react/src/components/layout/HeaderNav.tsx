@@ -1,7 +1,10 @@
 import styled, { css } from 'styled-components';
+import { FiSettings, FiMenu, FiX, FiSidebar, FiDatabase } from 'react-icons/fi';
+import { MdHub } from 'react-icons/md';
+import { MdOutlineViewSidebar } from 'react-icons/md';
 import { Button } from '../common/Button';
 
-export type NavRoute = 'home' | 'downloads';
+export type NavRoute = 'cluster' | 'model-store';
 
 export interface HeaderNavProps {
   showHome?: boolean;
@@ -75,7 +78,7 @@ const LogoBtn = styled.button<{ $disabled: boolean }>`
 const LogoText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.xxl};
   font-weight: 700;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
   filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
 `;
@@ -91,9 +94,7 @@ const NavLink = styled.button<{ $active?: boolean }>`
   border: 1px solid ${({ $active, theme }) => $active ? theme.colors.goldDim : theme.colors.border};
   background: ${({ $active, theme }) => $active ? theme.colors.goldBg : 'transparent'};
   font-size: ${({ theme }) => theme.fontSizes.nav};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ $active, theme }) => $active ? theme.colors.gold : theme.colors.textSecondary};
   transition: all 0.15s;
 
@@ -109,52 +110,15 @@ const DownloadBadge = styled.div`
   height: 28px;
 `;
 
-/* ---- icons ---- */
+/* ---- icons (react-icons) ---- */
 
-const MenuIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const SidebarIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
-  </svg>
-);
-
-const PanelIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-  </svg>
-);
-
-const DownloadIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-    <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-  </svg>
-);
-
-const HomeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-);
+const MenuIcon = () => <FiMenu size={18} />;
+const CloseIcon = () => <FiX size={18} />;
+const SidebarIcon = () => <FiSidebar size={18} />;
+const PanelIcon = () => <MdOutlineViewSidebar size={18} />;
+const ClusterIcon = () => <MdHub size={16} />;
+const StoreIcon = () => <FiDatabase size={16} />;
+const SettingsIcon = () => <FiSettings size={16} />;
 
 function ProgressCircle({ count, percentage }: { count: number; percentage: number }) {
   const r = 10;
@@ -186,7 +150,7 @@ function ProgressCircle({ count, percentage }: { count: number; percentage: numb
 export function HeaderNav({
   showHome = true,
   onHome,
-  activeRoute = 'home',
+  activeRoute = 'cluster',
   onNavigate,
   showSidebarToggle = false,
   sidebarVisible = true,
@@ -203,7 +167,7 @@ export function HeaderNav({
 }: HeaderNavProps) {
   const navigate = (route: NavRoute) => {
     onNavigate?.(route);
-    if (route === 'home') onHome?.();
+    if (route === 'cluster') onHome?.();
   };
 
   return (
@@ -219,7 +183,7 @@ export function HeaderNav({
             <SidebarIcon />
           </ToggleBtn>
         )}
-        <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('home') : undefined}>
+        <LogoBtn $disabled={!showHome} onClick={showHome ? () => navigate('cluster') : undefined}>
           <LogoText>Skulk</LogoText>
         </LogoBtn>
       </LeftGroup>
@@ -227,12 +191,12 @@ export function HeaderNav({
       <RightGroup>
         {downloadProgress && <ProgressCircle count={downloadProgress.count} percentage={downloadProgress.percentage} />}
 
-        <NavLink $active={activeRoute === 'home'} onClick={() => navigate('home')}>
-          <HomeIcon /> Home
+        <NavLink $active={activeRoute === 'cluster'} onClick={() => navigate('cluster')}>
+          <ClusterIcon /> Cluster
         </NavLink>
 
-        <NavLink $active={activeRoute === 'downloads'} onClick={() => navigate('downloads')}>
-          <DownloadIcon /> Downloads
+        <NavLink $active={activeRoute === 'model-store'} onClick={() => navigate('model-store')}>
+          <StoreIcon /> Model Store
         </NavLink>
 
         <Button variant="ghost" size="lg" icon onClick={() => onOpenSettings?.()} aria-label="Settings">

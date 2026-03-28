@@ -86,7 +86,7 @@ const Body = styled.div`
 const Message = styled.p`
   flex: 1;
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.4;
   margin: 0;

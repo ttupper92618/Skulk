@@ -57,9 +57,7 @@ const HeaderRow = styled.div`
   gap: 8px;
   padding: 8px 12px;
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
@@ -114,7 +112,7 @@ const AttachBtn = styled(Button)`
 const Prompt = styled.span`
   color: #FFD700;
   font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   flex-shrink: 0;
   line-height: 28px;
 `;
@@ -123,7 +121,7 @@ const TextArea = styled.textarea`
   all: unset;
   flex: 1;
   font-size: ${({ theme }) => theme.fontSizes.md};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
   min-height: 28px;
   max-height: 150px;
@@ -148,16 +146,14 @@ const DragOverlay = styled.div`
   border: 2px dashed #FFD700;
   border-radius: ${({ theme }) => theme.radii.lg};
   font-size: ${({ theme }) => theme.fontSizes.md};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
 `;
 
 const HelperText = styled.div`
   padding: 4px 12px 8px;
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
   text-align: center;
 `;

@@ -31,9 +31,7 @@ const Dot = styled.div`
 
 const Text = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #fca5a5;
 `;
 

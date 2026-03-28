@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css } from 'styled-components';
 import type { TopologyData } from '../../types/topology';
-import type { RawDownloads, NodeDiskInfo } from '../../hooks/useClusterState';
+import type { RawDownloads, NodeDiskInfo, RawInstances } from '../../hooks/useClusterState';
 import { StoreRegistryTable, type StoreRegistryEntry, type StoreDownloadProgress, type ModelCardInfo } from '../layout/StoreRegistryTable';
 import { ModelSearchModal } from './ModelSearchModal';
+import { FiTrash2, FiSearch, FiCheck } from 'react-icons/fi';
 import { Button } from '../common/Button';
 import { addToast } from '../../hooks/useToast';
 
-type Tab = 'nodes' | 'store';
-
-interface DownloadsPageProps {
+interface ModelStorePageProps {
   topology: TopologyData | null;
   downloads: RawDownloads;
   nodeDisk: NodeDiskInfo;
+  instances: RawInstances;
 }
 
 /* ── Data extraction helpers ──────────────────────────── */
@@ -139,19 +139,8 @@ function formatBytes(bytes: number): string {
   return `${val.toFixed(val >= 10 ? 0 : 1)}${units[i]}`;
 }
 
-const TrashIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
+const TrashIcon = () => <FiTrash2 size={14} />;
+const SearchIcon = () => <FiSearch size={14} />;
 
 function formatSpeed(bps: number): string {
   if (!bps || bps <= 0) return '--';
@@ -163,18 +152,11 @@ function formatSpeed(bps: number): string {
 
 /* ── Component ────────────────────────────────────────── */
 
-export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPageProps) {
-  const [tab, setTab] = useState<Tab | null>(null);
-  const [storeAvailable, setStoreAvailable] = useState(false);
+export function ModelStorePage({ topology, downloads, nodeDisk, instances }: ModelStorePageProps) {
   const [storeEntries, setStoreEntries] = useState<StoreRegistryEntry[]>([]);
   const [storeDownloads, setStoreDownloads] = useState<StoreDownloadProgress[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
-
-  const { rows, columns } = useMemo(
-    () => buildGrid(downloads, topology, nodeDisk),
-    [downloads, topology, nodeDisk],
-  );
 
   // Extract model card info from download data for the store table tooltips
   const modelCards = useMemo<Record<string, ModelCardInfo>>(() => {
@@ -252,26 +234,10 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
     finally { setStoreLoading(false); }
   }, [fetchDownloads]);
 
-  // Detect store availability and set default tab
+  // Load store registry on mount
   useEffect(() => {
-    if (tab !== null) return;
-    (async () => {
-      try {
-        const res = await fetch('/store/health');
-        if (res.ok) {
-          setStoreAvailable(true);
-          setTab('store');
-          return;
-        }
-      } catch { /* ignore */ }
-      setTab('nodes');
-    })();
-  }, [tab]);
-
-  // Load store registry when switching to store tab
-  useEffect(() => {
-    if (tab === 'store') loadRegistry();
-  }, [tab, loadRegistry]);
+    loadRegistry();
+  }, [loadRegistry]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -311,23 +277,64 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
     [storeEntries],
   );
 
-  const activeTab = tab ?? 'nodes';
+  // Derive active model IDs and model→instanceId mapping from running instances
+  const { activeModelIds, modelToInstanceId } = useMemo(() => {
+    const ids: string[] = [];
+    const mapping: Record<string, string> = {};
+    for (const [iid, inst] of Object.entries(instances)) {
+      const inner = inst.MlxRingInstance ?? inst.MlxJacclInstance;
+      const modelId = inner?.shardAssignments?.modelId;
+      if (modelId) {
+        ids.push(modelId);
+        mapping[modelId] = (inner as Record<string, unknown>).instanceId as string ?? iid;
+      }
+    }
+    return { activeModelIds: ids, modelToInstanceId: mapping };
+  }, [instances]);
+
+  const handleLaunch = useCallback(async (modelId: string) => {
+    try {
+      const res = await fetch('/place_instance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_id: modelId,
+          sharding: 'Pipeline',
+          instance_meta: 'MlxRing',
+          min_nodes: 1,
+        }),
+      });
+      if (res.ok) {
+        addToast({ type: 'success', message: `Launching ${modelId}` });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        addToast({ type: 'error', message: (err as Record<string, string>).detail ?? `Failed to launch ${modelId}` });
+      }
+    } catch {
+      addToast({ type: 'error', message: `Failed to launch model` });
+    }
+  }, []);
+
+  const handleStop = useCallback(async (modelId: string) => {
+    const instanceId = modelToInstanceId[modelId];
+    if (!instanceId) {
+      addToast({ type: 'error', message: `No running instance found for ${modelId}` });
+      return;
+    }
+    try {
+      const res = await fetch(`/instance/${encodeURIComponent(instanceId)}`, { method: 'DELETE' });
+      if (res.ok) {
+        addToast({ type: 'success', message: `Stopping ${modelId}` });
+      } else {
+        addToast({ type: 'error', message: `Failed to stop ${modelId}` });
+      }
+    } catch {
+      addToast({ type: 'error', message: `Failed to stop model` });
+    }
+  }, [modelToInstanceId]);
 
   return (
     <Container>
-      {storeAvailable && (
-        <TopBar>
-          <SegmentedToggle>
-            <SegmentBtn $active={activeTab === 'nodes'} onClick={() => setTab('nodes')}>
-              Node Downloads
-            </SegmentBtn>
-            <SegmentBtn $active={activeTab === 'store'} onClick={() => setTab('store')}>
-              Store Registry
-            </SegmentBtn>
-          </SegmentedToggle>
-        </TopBar>
-      )}
-
       {purgeConfirm && (
         <PurgeModal>
           <ModalBackdrop onClick={() => setPurgeConfirm(false)} />
@@ -353,50 +360,11 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
         </PurgeModal>
       )}
 
-      {activeTab === 'nodes' ? (
-        rows.length === 0 ? (
-          <EmptyState>
-            No downloads found. Start a model download to see progress here.
-          </EmptyState>
-        ) : (
-          <TableWrap>
-            <Table>
-              <thead>
-                <tr>
-                  <ModelHeader>MODEL</ModelHeader>
-                  {columns.map((col) => (
-                    <NodeHeader key={col.nodeId}>
-                      <NodeName>{col.label.toUpperCase()}</NodeName>
-                      {col.diskFreeBytes != null && (
-                        <DiskFree>{formatBytes(col.diskFreeBytes)} free</DiskFree>
-                      )}
-                    </NodeHeader>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.modelId}>
-                    <ModelCell>{row.modelId}</ModelCell>
-                    {columns.map((col) => {
-                      const cell = row.cells[col.nodeId];
-                      return (
-                        <StatusCell key={col.nodeId}>
-                          {cell ? <CellContent cell={cell} /> : <NotPresent>--</NotPresent>}
-                        </StatusCell>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )
-      ) : (
-        <StoreRegistryTable
+      <StoreRegistryTable
           entries={storeEntries}
           activeDownloads={storeDownloads}
           loading={storeLoading}
+          activeModelIds={activeModelIds}
           modelCards={modelCards}
           actions={
             <>
@@ -410,8 +378,9 @@ export function DownloadsPage({ topology, downloads, nodeDisk }: DownloadsPagePr
           }
           onRefresh={loadRegistry}
           onDelete={() => {}}
+          onLaunch={handleLaunch}
+          onStop={handleStop}
         />
-      )}
       <ModelSearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
@@ -452,18 +421,14 @@ function CellContent({ cell }: { cell: CellStatus }) {
         </CellInner>
       );
     case 'failed':
-      return <FailedText>FAILED</FailedText>;
+      return <FailedText>Failed</FailedText>;
     default:
       return <NotPresent>--</NotPresent>;
   }
 }
 
 function CheckIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
+  return <FiCheck size={20} color="#4ade80" strokeWidth={2.5} />;
 }
 
 /* ── Styles ───────────────────────────────────────────── */
@@ -506,16 +471,14 @@ const ModalBox = styled.div`
 `;
 
 const ModalTitle = styled.h3`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  text-transform: uppercase;
-  letter-spacing: 1px;
   color: ${({ theme }) => theme.colors.error};
   margin: 0 0 12px;
 `;
 
 const ModalText = styled.p`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textSecondary};
   line-height: 1.5;
@@ -523,7 +486,7 @@ const ModalText = styled.p`
 `;
 
 const ModalNote = styled.p`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.xs};
   color: ${({ theme }) => theme.colors.textMuted};
   margin: 0 0 16px;
@@ -545,10 +508,8 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
   all: unset;
   cursor: pointer;
   padding: 8px 20px;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.nav};
-  text-transform: uppercase;
-  letter-spacing: 1px;
   transition: all 0.15s;
 
   ${({ $active, theme }) =>
@@ -580,7 +541,7 @@ const EmptyState = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
   background: rgba(0, 0, 0, 0.2);
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
@@ -595,7 +556,7 @@ const TableWrap = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
 `;
 
@@ -605,8 +566,6 @@ const ModelHeader = styled.th`
   color: ${({ theme }) => theme.colors.gold};
   font-size: ${({ theme }) => theme.fontSizes.tableHead};
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
@@ -620,7 +579,6 @@ const NodeName = styled.div`
   color: ${({ theme }) => theme.colors.text};
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
   font-weight: 600;
-  letter-spacing: 0.5px;
 `;
 
 const DiskFree = styled.div`
@@ -665,7 +623,6 @@ const FailedText = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.sm};
   font-weight: 600;
   color: ${({ theme }) => theme.colors.error};
-  text-transform: uppercase;
 `;
 
 const NotPresent = styled.div`

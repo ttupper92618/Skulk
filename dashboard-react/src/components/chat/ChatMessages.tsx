@@ -52,9 +52,7 @@ const EmptyState = styled.div`
   padding: 80px 0;
   gap: 16px;
   color: ${({ theme }) => theme.colors.textMuted};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
 `;
 
@@ -91,9 +89,7 @@ const MsgHeader = styled.div`
   gap: 8px;
   margin-bottom: 8px;
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: ${({ theme }) => theme.fonts.body};
 `;
 
 const RoleLabel = styled.span<{ $role: 'user' | 'assistant' }>`
@@ -121,7 +117,7 @@ const Dot = styled.span<{ $color: string }>`
 const Spacer = styled.span`flex: 1;`;
 
 const UserContent = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.md};
   white-space: pre-wrap;
   line-height: 1.5;
@@ -159,7 +155,7 @@ const ActiveGhostBtn = styled(Button)<{ $active?: boolean }>`
 const EditArea = styled.textarea`
   all: unset;
   width: 100%;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.md};
   color: ${({ theme }) => theme.colors.text};
   background: ${({ theme }) => theme.colors.bg};
@@ -185,7 +181,7 @@ const ConfirmBox = styled.div`
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: ${({ theme }) => theme.radii.sm};
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #fca5a5;
 `;
 
@@ -206,7 +202,7 @@ const ThinkingHeader = styled.button`
   width: 100%;
   padding: 6px 10px;
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: rgba(255, 215, 0, 0.6);
   transition: background 0.15s;
   box-sizing: border-box;
@@ -392,7 +388,7 @@ export function ChatMessages({
             {msg.role === 'assistant' ? (
               <>
                 <Dot $color="#FFD700" />
-                <RoleLabel $role="assistant">SKULK</RoleLabel>
+                <RoleLabel $role="assistant">Skulk</RoleLabel>
                 <Timestamp>{formatTime(msg.timestamp)}</Timestamp>
                 {msg.ttftMs != null && <StatLabel>TTFT <span>{Math.round(msg.ttftMs)}ms</span></StatLabel>}
                 {msg.tps != null && <StatLabel>TPS <span>{msg.tps.toFixed(1)}</span></StatLabel>}
@@ -527,7 +523,7 @@ export function ChatMessages({
         <MessageCard $role="assistant">
           <MsgHeader>
             <Dot $color="#FFD700" />
-            <RoleLabel $role="assistant">SKULK</RoleLabel>
+            <RoleLabel $role="assistant">Skulk</RoleLabel>
           </MsgHeader>
           <MarkdownContent content={streamingContent} />
           <Cursor />

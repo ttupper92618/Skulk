@@ -59,7 +59,7 @@ const SearchInput = styled.input`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
   box-sizing: border-box;
 
@@ -69,9 +69,7 @@ const SearchInput = styled.input`
 
 const SectionLabel = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
   padding: 8px 16px 4px;
 `;
@@ -99,7 +97,7 @@ const ConvItem = styled.div<{ $active: boolean }>`
 
 const ConvName = styled.div<{ $active: boolean }>`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ $active }) => ($active ? '#FFD700' : '#e5e5e5')};
   white-space: nowrap;
   overflow: hidden;
@@ -133,7 +131,7 @@ const EditInput = styled.input`
   border: 1px solid rgba(255, 215, 0, 0.4);
   border-radius: ${({ theme }) => theme.radii.sm};
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
   box-sizing: border-box;
 `;
@@ -144,7 +142,7 @@ const ConfirmBox = styled.div<{ $danger?: boolean }>`
   border: 1px solid ${({ $danger }) => ($danger ? 'rgba(239,68,68,0.3)' : 'rgba(255,215,0,0.2)')};
   border-radius: ${({ theme }) => theme.radii.sm};
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ $danger, theme }) => ($danger ? '#fca5a5' : theme.colors.textSecondary)};
 `;
 
@@ -163,10 +161,8 @@ const Footer = styled.div`
 
 const ConvCount = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
-  text-transform: uppercase;
-  letter-spacing: 1px;
   margin-top: 8px;
 `;
 
@@ -178,9 +174,7 @@ const EmptyState = styled.div`
   padding: 32px 16px;
   color: ${({ theme }) => theme.colors.textMuted};
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: ${({ theme }) => theme.fonts.body};
 `;
 
 /* ---- component ---- */

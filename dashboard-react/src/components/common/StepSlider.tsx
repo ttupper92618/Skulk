@@ -85,7 +85,7 @@ const Dot = styled.span<{ $active: boolean; $size: number; $inactiveSize: number
 
 const Label = styled.span<{ $active: boolean }>`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ $active }) => ($active ? '#FFD700' : 'rgba(179, 179, 179, 0.6)')};
   font-weight: ${({ $active }) => ($active ? 600 : 400)};
   transition: color 0.15s;

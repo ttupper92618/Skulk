@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import styled, { css, keyframes } from 'styled-components';
+import { FiTrash2, FiExternalLink, FiRefreshCw } from 'react-icons/fi';
+import { MdPlayArrow, MdClose } from 'react-icons/md';
 import { formatBytes } from '../../utils/format';
 import { Button } from '../common/Button';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -38,6 +40,8 @@ export interface StoreRegistryTableProps {
   actions?: React.ReactNode;
   onRefresh: () => void;
   onDelete: (entry: StoreRegistryEntry, isActive: boolean) => void;
+  onLaunch?: (modelId: string) => void;
+  onStop?: (modelId: string) => void;
 }
 
 /* ---- helpers ---- */
@@ -87,7 +91,7 @@ const HeaderActions = styled.div`
 
 const HeaderText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
@@ -107,7 +111,7 @@ const EmptyBox = styled.div`
   padding: 24px;
   text-align: center;
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
@@ -119,20 +123,18 @@ const Table = styled.div`
 
 const THead = styled.div`
   display: grid;
-  grid-template-columns: 1fr 80px 60px 100px 60px;
+  grid-template-columns: 36px 1fr 80px 60px 100px 60px;
   gap: 8px;
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.4);
   font-size: ${({ theme }) => theme.fontSizes.tableHead};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const TRow = styled.div<{ $highlight?: boolean }>`
   display: grid;
-  grid-template-columns: 1fr 80px 60px 100px 60px;
+  grid-template-columns: 36px 1fr 80px 60px 100px 60px;
   gap: 8px;
   padding: 10px 12px;
   align-items: center;
@@ -155,7 +157,7 @@ const ModelCell = styled.div`
 
 const ModelId = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
   white-space: nowrap;
   overflow: hidden;
@@ -168,8 +170,7 @@ const ActiveBadge = styled.span`
   gap: 4px;
   flex-shrink: 0;
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #4ade80;
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.2);
@@ -187,7 +188,7 @@ const PulseDot = styled.span`
 
 const Cell = styled.div<{ $align?: string }>`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
   text-align: ${({ $align }) => $align ?? 'left'};
 `;
@@ -210,8 +211,79 @@ const ProgressFill = styled.div<{ $pct: number }>`
 
 const ProgressText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
+`;
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const RefreshBtn = styled.button<{ $spinning: boolean }>`
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  transition: color 0.15s, background 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.gold};
+    background: ${({ theme }) => theme.colors.goldBg};
+  }
+
+  svg {
+    ${({ $spinning }) => $spinning && css`animation: ${spin} 0.8s linear infinite;`}
+  }
+`;
+
+const PlayCell = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const PlayBtn = styled.button`
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: ${({ theme }) => theme.colors.gold};
+  background: rgba(255, 215, 0, 0.15);
+  transition: background 0.15s, transform 0.1s;
+
+  &:hover {
+    background: rgba(255, 215, 0, 0.3);
+    transform: scale(1.1);
+  }
+`;
+
+const StopBtn = styled.button`
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: ${({ theme }) => theme.colors.error};
+  background: rgba(239, 68, 68, 0.15);
+  transition: background 0.15s, transform 0.1s;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.3);
+    transform: scale(1.1);
+  }
 `;
 
 const ActionsCell = styled.div`
@@ -228,13 +300,7 @@ const ActionsCell = styled.div`
    Component
    ================================================================ */
 
-const LinkIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    <polyline points="15 3 21 3 21 9" />
-    <line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
+const LinkIcon = () => <FiExternalLink size={14} style={{ flexShrink: 0 }} />;
 
 function ModelInfoContent({ entry, card }: { entry: StoreRegistryEntry; card?: ModelCardInfo }) {
   const hfUrl = entry.model_id.includes('/')
@@ -322,6 +388,8 @@ export function StoreRegistryTable({
   actions,
   onRefresh,
   onDelete,
+  onLaunch,
+  onStop,
 }: StoreRegistryTableProps) {
   const registeredIds = useMemo(() => new Set(entries.map((e) => e.model_id)), [entries]);
   const pendingDownloads = useMemo(
@@ -346,7 +414,9 @@ export function StoreRegistryTable({
         </HeaderText>
         <HeaderActions>
           {actions}
-          <Button variant="outline" size="sm" onClick={onRefresh}>Refresh</Button>
+          <RefreshBtn onClick={onRefresh} $spinning={loading} title="Refresh">
+            <FiRefreshCw size={16} />
+          </RefreshBtn>
         </HeaderActions>
       </HeaderRow>
 
@@ -359,6 +429,7 @@ export function StoreRegistryTable({
       ) : (
         <Table>
           <THead>
+            <div />
             <div>Model</div>
             <div style={{ textAlign: 'right' }}>Size</div>
             <div style={{ textAlign: 'right' }}>Files</div>
@@ -369,6 +440,7 @@ export function StoreRegistryTable({
           {/* Pending downloads (not yet registered) */}
           {pendingDownloads.map((dl) => (
             <TRow key={dl.modelId} $highlight>
+              <Cell />
               <ModelCell>
                 <ModelId title={dl.modelId}>{dl.modelId}</ModelId>
               </ModelCell>
@@ -392,6 +464,17 @@ export function StoreRegistryTable({
             const active = isActive(entry.model_id);
             return (
               <TRow key={entry.model_id}>
+                <PlayCell>
+                  {active && onStop ? (
+                    <StopBtn onClick={() => onStop(entry.model_id)} title="Stop model">
+                      <MdClose size={20} />
+                    </StopBtn>
+                  ) : !active && !dl && onLaunch ? (
+                    <PlayBtn onClick={() => onLaunch(entry.model_id)} title="Launch model">
+                      <MdPlayArrow size={20} />
+                    </PlayBtn>
+                  ) : null}
+                </PlayCell>
                 <ModelCell>
                   <ModelId title={entry.model_id}>{entry.model_id}</ModelId>
                   {active && (
@@ -420,9 +503,7 @@ export function StoreRegistryTable({
                     delay={100}
                   />
                   <Button variant="danger" size="sm" icon onClick={() => onDelete(entry, active)} title="Delete model">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
+                    <FiTrash2 size={18} />
                   </Button>
                 </ActionsCell>
               </TRow>

@@ -107,7 +107,7 @@ const Header = styled.div`
 
 const ClusterName = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
   margin-top: 4px;
 `;
@@ -153,9 +153,7 @@ const CardHeader = styled.div`
 
 const CategoryLabel = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
   flex: 1;
 `;
@@ -169,13 +167,13 @@ const InfoBtn = styled.span`
 
 const ModelName = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
 `;
 
 const ModelMeta = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
@@ -197,7 +195,7 @@ const Tooltip = styled.div<{ $x: number; $y: number }>`
   border-radius: ${({ theme }) => theme.radii.sm};
   padding: 4px 8px;
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
   white-space: nowrap;
   pointer-events: none;

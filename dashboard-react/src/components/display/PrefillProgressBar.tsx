@@ -50,7 +50,7 @@ const LabelRow = styled.div`
 `;
 
 const TokenCount = styled.span`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
 `;
 
 const Track = styled.div`
@@ -73,7 +73,7 @@ const FooterRow = styled.div`
   align-items: center;
   justify-content: space-between;
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: rgba(179, 179, 179, 0.7);
   margin-top: 4px;
 `;
