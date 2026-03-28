@@ -78,7 +78,7 @@ const LogoBtn = styled.button<{ $disabled: boolean }>`
 const LogoText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.xxl};
   font-weight: 700;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
   filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
 `;
@@ -94,7 +94,7 @@ const NavLink = styled.button<{ $active?: boolean }>`
   border: 1px solid ${({ $active, theme }) => $active ? theme.colors.goldDim : theme.colors.border};
   background: ${({ $active, theme }) => $active ? theme.colors.goldBg : 'transparent'};
   font-size: ${({ theme }) => theme.fontSizes.nav};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   text-transform: uppercase;
   letter-spacing: 1px;
   color: ${({ $active, theme }) => $active ? theme.colors.gold : theme.colors.textSecondary};

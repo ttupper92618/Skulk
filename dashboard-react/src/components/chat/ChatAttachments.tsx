@@ -54,7 +54,7 @@ const FileInfo = styled.div`
 
 const FileName = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
   white-space: nowrap;
   overflow: hidden;

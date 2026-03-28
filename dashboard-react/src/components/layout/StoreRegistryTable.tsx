@@ -91,7 +91,7 @@ const HeaderActions = styled.div`
 
 const HeaderText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
@@ -111,7 +111,7 @@ const EmptyBox = styled.div`
   padding: 24px;
   text-align: center;
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
@@ -128,7 +128,7 @@ const THead = styled.div`
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.4);
   font-size: ${({ theme }) => theme.fontSizes.tableHead};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: ${({ theme }) => theme.colors.textMuted};
@@ -159,7 +159,7 @@ const ModelCell = styled.div`
 
 const ModelId = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.text};
   white-space: nowrap;
   overflow: hidden;
@@ -172,7 +172,7 @@ const ActiveBadge = styled.span`
   gap: 4px;
   flex-shrink: 0;
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   text-transform: uppercase;
   color: #4ade80;
   background: rgba(34, 197, 94, 0.1);
@@ -191,7 +191,7 @@ const PulseDot = styled.span`
 
 const Cell = styled.div<{ $align?: string }>`
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
   text-align: ${({ $align }) => $align ?? 'left'};
 `;
@@ -214,7 +214,7 @@ const ProgressFill = styled.div<{ $pct: number }>`
 
 const ProgressText = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #FFD700;
 `;
 

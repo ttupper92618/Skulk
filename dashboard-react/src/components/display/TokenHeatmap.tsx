@@ -89,13 +89,13 @@ const TooltipHeader = styled.div`
 `;
 
 const TooltipToken = styled.span`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #fff;
 `;
 
 const LogprobText = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: rgba(156, 163, 175, 0.8);
   margin-bottom: 8px;
 `;
@@ -104,7 +104,7 @@ const AltRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.label};
   padding: 2px 0;
   color: rgba(209, 213, 219, 0.8);

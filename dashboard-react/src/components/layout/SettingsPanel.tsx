@@ -59,7 +59,7 @@ const Header = styled.div`
 
 const Title = styled.h2`
   font-size: ${({ theme }) => theme.fontSizes.md};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -94,7 +94,7 @@ const Fieldset = styled.fieldset`
 
 const Legend = styled.legend`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -114,7 +114,7 @@ const FieldLabel = styled.span`
   align-items: center;
   gap: 6px;
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
   white-space: nowrap;
 `;
@@ -154,13 +154,13 @@ const StyledField = styled(Field)`
 
 const ConfigPath = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const ErrorText = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: #ef4444;
 `;
 
@@ -170,7 +170,7 @@ const LoadingText = styled.div`
   justify-content: center;
   height: 200px;
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textMuted};
   text-transform: uppercase;
   letter-spacing: 1px;

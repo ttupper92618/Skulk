@@ -153,7 +153,7 @@ const WarningPill = styled.div<{ $color: ColorKey }>`
 `;
 
 const WarningLabel = styled.span<{ $color: ColorKey }>`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ $color }) => colorMap[$color].text};
   text-transform: uppercase;

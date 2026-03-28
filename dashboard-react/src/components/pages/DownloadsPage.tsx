@@ -471,7 +471,7 @@ const ModalBox = styled.div`
 `;
 
 const ModalTitle = styled.h3`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -480,7 +480,7 @@ const ModalTitle = styled.h3`
 `;
 
 const ModalText = styled.p`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textSecondary};
   line-height: 1.5;
@@ -488,7 +488,7 @@ const ModalText = styled.p`
 `;
 
 const ModalNote = styled.p`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.xs};
   color: ${({ theme }) => theme.colors.textMuted};
   margin: 0 0 16px;
@@ -510,7 +510,7 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
   all: unset;
   cursor: pointer;
   padding: 8px 20px;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.nav};
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -545,7 +545,7 @@ const EmptyState = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
   background: rgba(0, 0, 0, 0.2);
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
@@ -560,7 +560,7 @@ const TableWrap = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
 `;
 

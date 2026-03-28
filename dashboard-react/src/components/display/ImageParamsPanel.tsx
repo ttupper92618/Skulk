@@ -55,7 +55,7 @@ const Panel = styled.div`
   align-items: center;
   gap: 12px;
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 

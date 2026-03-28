@@ -192,7 +192,7 @@ const Header = styled.div`
 
 const ModelName = styled.div<{ $canFit: boolean }>`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   letter-spacing: 0.5px;
   color: ${({ $canFit }) => ($canFit ? '#FFD700' : '#f87171')};
   white-space: nowrap;
@@ -202,7 +202,7 @@ const ModelName = styled.div<{ $canFit: boolean }>`
 
 const ModelId = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: rgba(179, 179, 179, 0.8);
   white-space: nowrap;
   overflow: hidden;
@@ -212,7 +212,7 @@ const ModelId = styled.div`
 
 const MemorySize = styled.div<{ $canFit: boolean }>`
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ $canFit }) => ($canFit ? '#FFD700' : '#f87171')};
   flex-shrink: 0;
 `;
@@ -233,7 +233,7 @@ const BadgeRow = styled.div`
 
 const Badge = styled.span<{ $color?: string }>`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   letter-spacing: 1px;
   text-transform: uppercase;
   padding: 2px 6px;
@@ -244,7 +244,7 @@ const Badge = styled.span<{ $color?: string }>`
 
 const TagBadge = styled.span<{ $variant: 'green' | 'purple' }>`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   letter-spacing: 1px;
   text-transform: uppercase;
   padding: 2px 6px;
@@ -257,7 +257,7 @@ const TagBadge = styled.span<{ $variant: 'green' | 'purple' }>`
 
 const SectionTitle = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   letter-spacing: 2px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.2);
@@ -269,7 +269,7 @@ const DownloadRow = styled.div`
   align-items: center;
   gap: 8px;
   font-size: ${({ theme }) => theme.fontSizes.label};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
 `;
 
 const ProgressTrack = styled.div`

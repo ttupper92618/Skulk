@@ -55,7 +55,7 @@ const TooltipBox = styled.div`
   border-radius: ${({ theme }) => theme.radii.md};
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-family: ${({ theme }) => theme.fonts.mono};
+  font-family: ${({ theme }) => theme.fonts.body};
   color: ${({ theme }) => theme.colors.textSecondary};
   line-height: 1.5;
   z-index: 9999;
