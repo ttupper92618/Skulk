@@ -1,4 +1,5 @@
-import styled, { css } from 'styled-components';
+import { useEffect, useRef, useState } from 'react';
+import styled, { css, keyframes } from 'styled-components';
 import { FiSettings, FiMenu, FiX, FiSidebar, FiDatabase } from 'react-icons/fi';
 import { MdHub } from 'react-icons/md';
 import { MdOutlineViewSidebar } from 'react-icons/md';
@@ -120,28 +121,63 @@ const ClusterIcon = () => <MdHub size={16} />;
 const StoreIcon = () => <FiDatabase size={16} />;
 const SettingsIcon = () => <FiSettings size={16} />;
 
+const completePulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+`;
+
+const CompleteBadge = styled.div<{ $pulsing: boolean }>`
+  ${({ $pulsing }) => $pulsing && css`
+    animation: ${completePulse} 0.6s ease-in-out 3;
+  `}
+`;
+
 function ProgressCircle({ count, percentage }: { count: number; percentage: number }) {
   const r = 10;
   const circ = 2 * Math.PI * r;
   const offset = circ * (1 - percentage / 100);
+  const isComplete = percentage >= 100;
+  const [pulsing, setPulsing] = useState(false);
+  const prevCompleteRef = useRef(false);
+
+  useEffect(() => {
+    if (isComplete && !prevCompleteRef.current) {
+      setPulsing(true);
+      const timer = setTimeout(() => setPulsing(false), 1800);
+      return () => clearTimeout(timer);
+    }
+    prevCompleteRef.current = isComplete;
+  }, [isComplete]);
+
+  const strokeColor = isComplete ? '#4ade80' : '#FFD700';
+  const textColor = isComplete ? '#4ade80' : '#FFD700';
+  const trackColor = isComplete ? 'rgba(74,222,128,0.2)' : 'rgba(179,179,179,0.2)';
 
   return (
-    <DownloadBadge>
-      <svg width="28" height="28" viewBox="0 0 28 28">
-        <circle cx="14" cy="14" r={r} fill="none" stroke="rgba(179,179,179,0.2)" strokeWidth="2" />
-        <circle
-          cx="14" cy="14" r={r}
-          fill="none" stroke="#FFD700" strokeWidth="2"
-          strokeDasharray={circ} strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 14 14)"
-          style={{ transition: 'stroke-dashoffset 0.3s ease-out' }}
-        />
-        <text x="14" y="14" textAnchor="middle" dominantBaseline="central" fill="#FFD700" fontSize="8" fontFamily="monospace">
-          {count}
-        </text>
-      </svg>
-    </DownloadBadge>
+    <CompleteBadge $pulsing={pulsing}>
+      <DownloadBadge>
+        <svg width="28" height="28" viewBox="0 0 28 28">
+          <circle cx="14" cy="14" r={r} fill="none" stroke={trackColor} strokeWidth="2" />
+          <circle
+            cx="14" cy="14" r={r}
+            fill="none" stroke={strokeColor} strokeWidth="2"
+            strokeDasharray={circ} strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform="rotate(-90 14 14)"
+            style={{ transition: 'stroke-dashoffset 0.3s ease-out, stroke 0.3s ease' }}
+          />
+          {isComplete ? (
+            <g transform="translate(14,14)">
+              <polyline points="-4,0 -1,3 4,-3" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          ) : (
+            <text x="14" y="14" textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize="9" fontFamily="'Outfit', sans-serif" fontWeight="600">
+              {count}
+            </text>
+          )}
+        </svg>
+      </DownloadBadge>
+    </CompleteBadge>
   );
 }
 
