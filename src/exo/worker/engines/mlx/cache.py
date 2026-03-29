@@ -1,11 +1,11 @@
 import os
 from copy import deepcopy
+from typing import cast
 
 import mlx.core as mx
 import psutil
 from mlx_lm.models.cache import (
     ArraysCache,
-    CacheList,
     KVCache,
     QuantizedKVCache,
     RotatingKVCache,
@@ -14,7 +14,23 @@ from mlx_lm.tokenizer_utils import TokenizerWrapper
 
 from exo.shared.types.memory import Memory
 from exo.shared.types.mlx import KVCacheType, Model
-from exo.worker.engines.mlx.constants import CACHE_GROUP_SIZE, KV_CACHE_BITS
+from exo.worker.engines.mlx.constants import (
+    CACHE_GROUP_SIZE,
+    DEFAULT_KV_CACHE_BACKEND,
+    DEFAULT_TURBOQUANT_K_BITS,
+    DEFAULT_TURBOQUANT_V_BITS,
+    KV_CACHE_BACKEND,
+    KV_CACHE_BITS,
+    TURBOQUANT_FP16_LAYERS,
+    TURBOQUANT_K_BITS,
+    TURBOQUANT_V_BITS,
+    KVCacheBackend,
+)
+from exo.worker.engines.mlx.turboquant import (
+    make_turboquant_adaptive_cache,
+    make_turboquant_cache_from_template,
+)
+from exo.worker.engines.mlx.turboquant.cache import ensure_standard_attention
 from exo.worker.runner.bootstrap import logger
 
 
@@ -200,7 +216,7 @@ class KVPrefixCache:
             # Reset cache offset to match trimmed length
             for c in prompt_cache:
                 if hasattr(c, "offset"):
-                    c.offset = restore_pos
+                    c.offset = restore_pos  # pyright: ignore[reportAttributeAccessIssue]
 
         self._access_counter += 1
         self._last_used[best_index] = self._access_counter
@@ -255,7 +271,9 @@ def trim_cache(
             else:
                 c.state = [None] * len(c.state)
         else:
-            c.trim(num_tokens)
+            trim_fn = getattr(c, "trim", None)
+            if callable(trim_fn):
+                trim_fn(num_tokens)
 
 
 def encode_prompt(tokenizer: TokenizerWrapper, prompt: str) -> mx.array:
@@ -270,12 +288,10 @@ def encode_prompt(tokenizer: TokenizerWrapper, prompt: str) -> mx.array:
     return mx.array(prompt_tokens)
 
 
-def _entry_length(
-    c: KVCache | RotatingKVCache | QuantizedKVCache | ArraysCache | CacheList,
-) -> int:
+def _entry_length(c: object) -> int:
     # Use .offset attribute which KVCache types have (len() not implemented in older QuantizedKVCache).
     if hasattr(c, "offset"):
-        return c.offset
+        return int(c.offset)  # type: ignore[attr-defined]
     # For CacheList
     if hasattr(c, "size"):
         return int(c.size())  # type: ignore
@@ -314,20 +330,84 @@ def make_kv_cache(
 ) -> KVCacheType:
     assert hasattr(model, "layers")
 
+    backend = get_kv_cache_backend()
+    if max_kv_size is not None:
+        logger.info(f"Using rotating KV cache with {max_kv_size=} with {keep=}")
+        return [RotatingKVCache(max_size=max_kv_size, keep=keep) for _ in model.layers]
+
+    if backend == "mlx_quantized":
+        if KV_CACHE_BITS is None:
+            raise ValueError(
+                "EXO_KV_CACHE_BACKEND=mlx_quantized requires EXO_KV_CACHE_BITS to be set"
+            )
+        logger.info(
+            f"Using MLX quantized KV cache with bits={KV_CACHE_BITS} group_size={CACHE_GROUP_SIZE}"
+        )
+        if hasattr(model, "make_cache"):
+            template_cache = cast(
+                list[object],
+                model.make_cache(),  # type: ignore[reportUnknownMemberType]
+            )
+            caches: list[object] = []
+            for entry in template_cache:
+                if isinstance(entry, KVCache):
+                    caches.append(
+                        QuantizedKVCache(
+                            group_size=CACHE_GROUP_SIZE,
+                            bits=KV_CACHE_BITS,
+                        )
+                    )
+                else:
+                    caches.append(entry)
+            return caches
+        return [
+            QuantizedKVCache(group_size=CACHE_GROUP_SIZE, bits=KV_CACHE_BITS)
+            for _ in model.layers
+        ]
+
+    if backend in ("turboquant", "turboquant_adaptive"):
+        ensure_standard_attention(model)
+        key_bits = TURBOQUANT_K_BITS or DEFAULT_TURBOQUANT_K_BITS
+        value_bits = TURBOQUANT_V_BITS or DEFAULT_TURBOQUANT_V_BITS
+        if backend == "turboquant_adaptive":
+            logger.info(
+                "Using TurboQuant adaptive KV cache "
+                f"with key_bits={key_bits} value_bits={value_bits} fp16_layers={TURBOQUANT_FP16_LAYERS}"
+            )
+            return make_turboquant_adaptive_cache(
+                model,
+                key_bits=key_bits,
+                value_bits=value_bits,
+                fp16_layers=TURBOQUANT_FP16_LAYERS,
+            )
+        logger.info(
+            f"Using TurboQuant KV cache with key_bits={key_bits} value_bits={value_bits}"
+        )
+        return make_turboquant_cache_from_template(
+            model,
+            key_bits=key_bits,
+            value_bits=value_bits,
+        )
+
     if hasattr(model, "make_cache"):
         logger.info("Using MLX LM's make cache")
         return model.make_cache()  # type: ignore
 
-    if max_kv_size is None:
-        if KV_CACHE_BITS is None:
-            logger.info("Using default KV cache")
-            return [KVCache() for _ in model.layers]
-        else:
-            logger.info("Using quantized KV cache")
-            return [
-                QuantizedKVCache(group_size=CACHE_GROUP_SIZE, bits=KV_CACHE_BITS)
-                for _ in model.layers
-            ]
-    else:
-        logger.info(f"Using rotating KV cache with {max_kv_size=} with {keep=}")
-        return [RotatingKVCache(max_size=max_kv_size, keep=keep) for _ in model.layers]
+    logger.info("Using default KV cache")
+    return [KVCache() for _ in model.layers]
+
+
+def get_kv_cache_backend() -> KVCacheBackend:
+    backend = KV_CACHE_BACKEND
+    valid_backends: tuple[KVCacheBackend, ...] = (
+        "default",
+        "mlx_quantized",
+        "turboquant",
+        "turboquant_adaptive",
+    )
+    if backend not in valid_backends:
+        logger.warning(
+            f"Unknown EXO_KV_CACHE_BACKEND={backend!r}; falling back to {DEFAULT_KV_CACHE_BACKEND!r}"
+        )
+        return DEFAULT_KV_CACHE_BACKEND
+    return backend
