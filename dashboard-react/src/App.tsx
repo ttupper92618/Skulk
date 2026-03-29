@@ -107,7 +107,9 @@ export function App() {
   const { topology, connected, downloads, nodeDisk, instances, runners } = useClusterState();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storeDownloads, setStoreDownloads] = useState<StoreDownload[]>([]);
-  const { activeRoute, panelOpen, historyPanelOpen } = useUIStore();
+  const activeRoute = useUIStore((s) => s.activeRoute);
+  const panelOpen = useUIStore((s) => s.panelOpen);
+  const historyPanelOpen = useUIStore((s) => s.historyPanelOpen);
   const setActiveRoute = useUIStore((s) => s.setActiveRoute);
   const togglePanel = useUIStore((s) => s.togglePanel);
   const toggleHistoryPanel = useUIStore((s) => s.toggleHistoryPanel);
