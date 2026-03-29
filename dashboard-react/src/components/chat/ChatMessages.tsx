@@ -219,8 +219,12 @@ const ThinkingChevron = styled.span<{ $open: boolean }>`
 const ThinkingContent = styled.div`
   padding: 8px 10px;
   font-size: ${({ theme }) => theme.fontSizes.tableBody};
-  color: ${({ theme }) => theme.colors.textSecondary};
+  color: ${({ theme }) => theme.colors.textMuted};
   border-top: 1px solid rgba(255, 215, 0, 0.1);
+
+  & * {
+    color: inherit;
+  }
 `;
 
 const ShowHideBtn = styled.button`

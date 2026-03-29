@@ -15,6 +15,7 @@ import { ChatView } from './components/pages/ChatView';
 import { InstancePanel, type InstanceCardData } from './components/layout/InstancePanel';
 import { addToast } from './hooks/useToast';
 import type { InstanceStatus } from './components/cluster/RunningInstanceCard';
+import { useChatStore } from './stores/chatStore';
 
 const Shell = styled.div`
   position: relative;
@@ -37,7 +38,8 @@ const Main = styled.main`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 `;
 
 interface StoreDownload {
@@ -105,7 +107,6 @@ export function App() {
   const [activeRoute, setActiveRoute] = useState<NavRoute>('cluster');
   const [storeDownloads, setStoreDownloads] = useState<StoreDownload[]>([]);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [chatModelId, setChatModelId] = useState<string | undefined>(undefined);
 
   // Poll store downloads for the header progress indicator
   const pollStoreDownloads = useCallback(async () => {
@@ -212,9 +213,9 @@ export function App() {
           mobileRightOpen={panelOpen}
           onToggleMobileRight={() => setPanelOpen((o) => !o)}
         />
-        <ClusterWarnings topology={topology} />
         <ContentRow>
           <Main>
+            <ClusterWarnings topology={topology} />
             {activeRoute === 'model-store' ? (
               <ModelStorePage
                 topology={topology}
@@ -222,10 +223,10 @@ export function App() {
                 nodeDisk={nodeDisk}
                 instances={instances}
                 runners={runners}
-                onChat={(modelId) => { setChatModelId(modelId); setActiveRoute('chat'); }}
+                onChat={(modelId) => { useChatStore.getState().selectModel(modelId); setActiveRoute('chat'); }}
               />
             ) : activeRoute === 'chat' ? (
-              <ChatView readyInstances={instanceCards} initialModelId={chatModelId} />
+              <ChatView readyInstances={instanceCards} />
             ) : topology ? (
               <TopologyGraph data={topology} />
             ) : (
@@ -238,7 +239,7 @@ export function App() {
             <InstancePanel
               instances={instanceCards}
               onDelete={handleDeleteInstance}
-              onChat={(modelId) => { setChatModelId(modelId); setActiveRoute('chat'); }}
+              onChat={(modelId) => { useChatStore.getState().selectModel(modelId); setActiveRoute('chat'); }}
             />
           )}
         </ContentRow>

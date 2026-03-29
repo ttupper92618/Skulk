@@ -5,15 +5,44 @@ import { ChatForm } from '../chat/ChatForm';
 import type { ChatMessage } from '../../types/chat';
 import type { ChatUploadedFile } from '../../types/chat';
 import type { InstanceCardData } from '../layout/InstancePanel';
+import { useChatStore, selectActiveMessages, selectActiveConversation } from '../../stores/chatStore';
 
 /* ── Types ────────────────────────────────────────────── */
 
 export interface ChatViewProps {
   /** Ready instances the user can chat with. */
   readyInstances: InstanceCardData[];
-  /** Pre-selected model ID (e.g. from clicking Chat on a card). */
-  initialModelId?: string;
   className?: string;
+}
+
+/* ── AI Summary ───────────────────────────────────────── */
+
+async function generateSummary(convoId: string, modelId: string, messages: ChatMessage[]) {
+  try {
+    const res = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          ...messages.slice(0, 6).map((m) => ({ role: m.role, content: m.content })),
+          {
+            role: 'user',
+            content: 'Summarize this conversation in one short sentence (max 10 words). Reply with only the summary, nothing else.',
+          },
+        ],
+        max_tokens: 30,
+      }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    if (summary) {
+      useChatStore.getState().setSummary(convoId, summary);
+    }
+  } catch {
+    // silent failure
+  }
 }
 
 /* ── Styles ───────────────────────────────────────────── */
@@ -68,12 +97,17 @@ const ModelSelect = styled.select`
 
 /* ── Component ────────────────────────────────────────── */
 
-export function ChatView({ readyInstances, initialModelId, className }: ChatViewProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function ChatView({ readyInstances, className }: ChatViewProps) {
+  // Store state
+  const selectedModelId = useChatStore((s) => s.selectedModelId);
+  const messages = useChatStore(selectActiveMessages);
+  const activeConversation = useChatStore(selectActiveConversation);
+  const { selectModel, addMessage, deleteMessage, editMessage, removeLastAssistantMessages } = useChatStore();
+
+  // Local transient state
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [streamingThinking, setStreamingThinking] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(initialModelId ?? null);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [ttftMs, setTtftMs] = useState<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
@@ -100,22 +134,18 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
     ? (modelCapabilities[selectedModelId]?.includes('thinking_toggle') ?? false)
     : false;
 
-  // Auto-select first ready model if none selected
+  // Ready models
   const readyModels = useMemo(
     () => readyInstances.filter((i) => i.status === 'ready' || i.status === 'running'),
     [readyInstances],
   );
 
+  // Auto-select first ready model if none selected
   useEffect(() => {
     if (!selectedModelId && readyModels.length > 0) {
-      setSelectedModelId(readyModels[0].modelId);
+      selectModel(readyModels[0].modelId);
     }
-  }, [selectedModelId, readyModels]);
-
-  // If initialModelId changes (e.g. user clicked Chat on a different card), update
-  useEffect(() => {
-    if (initialModelId) setSelectedModelId(initialModelId);
-  }, [initialModelId]);
+  }, [selectedModelId, readyModels, selectModel]);
 
   const selectedLabel = useMemo(() => {
     if (!selectedModelId) return undefined;
@@ -127,20 +157,23 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
     if (!selectedModelId || isLoading) return;
 
     const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}-user`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: text,
       timestamp: Date.now(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    addMessage(userMsg);
     setIsLoading(true);
     setStreamingContent('');
     setStreamingThinking(null);
     setTtftMs(null);
     setTps(null);
 
-    const allMessages = [...messages, userMsg];
+    // Read messages from store (includes the user message we just added)
+    const allMessages = useChatStore.getState().conversations[
+      useChatStore.getState().activeConversationId!
+    ]?.messages ?? [];
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -151,7 +184,6 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
     let rawContent = '';
     let fullThinking = '';
     let lastTps: number | undefined;
-    let inThinkTag = false;
 
     try {
       const res = await fetch('/v1/chat/completions', {
@@ -238,7 +270,6 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
                   i++;
                 }
               }
-              inThinkTag = inTag;
 
               // If we found think tags, route to thinking
               if (thinkContent) {
@@ -274,7 +305,7 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
 
     // Finalize assistant message
     const assistantMsg: ChatMessage = {
-      id: `msg-${Date.now()}-assistant`,
+      id: crypto.randomUUID(),
       role: 'assistant',
       content: rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*/i, '').trim(),
       timestamp: Date.now(),
@@ -283,42 +314,46 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
       thinkingContent: fullThinking || undefined,
     };
 
-    setMessages((prev) => [...prev, assistantMsg]);
+    addMessage(assistantMsg);
     setStreamingContent(null);
     setStreamingThinking(null);
     setIsLoading(false);
     abortRef.current = null;
-  }, [selectedModelId, isLoading, messages, thinkingEnabled]);
+
+    // Trigger AI summary if conversation has enough exchanges
+    const convo = useChatStore.getState().conversations[
+      useChatStore.getState().activeConversationId!
+    ];
+    if (convo && !convo.summary && convo.messages.length >= 4) {
+      generateSummary(convo.id, convo.modelId, convo.messages);
+    }
+  }, [selectedModelId, isLoading, thinkingEnabled, addMessage]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
   const handleDelete = useCallback((id: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
-  }, []);
+    deleteMessage(id);
+  }, [deleteMessage]);
 
   const handleEdit = useCallback((id: string, content: string) => {
-    setMessages((prev) => prev.map((m) => m.id === id ? { ...m, content } : m));
-  }, []);
+    editMessage(id, content);
+  }, [editMessage]);
 
   const handleRegenerate = useCallback(() => {
-    // Remove last assistant message, re-send last user message
-    setMessages((prev) => {
-      const withoutLast = [...prev];
-      while (withoutLast.length > 0 && withoutLast[withoutLast.length - 1].role === 'assistant') {
-        withoutLast.pop();
-      }
-      return withoutLast;
-    });
-    // Trigger re-send on next tick after state updates
+    removeLastAssistantMessages();
+    // Re-send last user message on next tick after store updates
     setTimeout(() => {
-      const lastUser = messages.filter((m) => m.role === 'user').pop();
+      const convo = useChatStore.getState().conversations[
+        useChatStore.getState().activeConversationId!
+      ];
+      const lastUser = convo?.messages.filter((m) => m.role === 'user').pop();
       if (lastUser) {
         handleSend(lastUser.content, []);
       }
     }, 50);
-  }, [messages, handleSend]);
+  }, [handleSend, removeLastAssistantMessages]);
 
   if (readyModels.length === 0) {
     return (
@@ -329,7 +364,7 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
   }
 
   const modelSelector = readyModels.length > 1 ? (
-    <ModelSelect value={selectedModelId ?? ''} onChange={(e) => setSelectedModelId(e.target.value)}>
+    <ModelSelect value={selectedModelId ?? ''} onChange={(e) => selectModel(e.target.value)}>
       {readyModels.map((m) => (
         <option key={m.instanceId} value={m.modelId}>
           {m.modelId.split('/').pop()}
@@ -369,4 +404,3 @@ export function ChatView({ readyInstances, initialModelId, className }: ChatView
     </Container>
   );
 }
-
