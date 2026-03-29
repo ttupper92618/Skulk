@@ -20,25 +20,38 @@ export interface ChatViewProps {
 
 async function generateSummary(convoId: string, modelId: string, messages: ChatMessage[]) {
   try {
+    // Build a condensed transcript for the summary prompt
+    const transcript = messages
+      .slice(0, 6)
+      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 200)}`)
+      .join('\n');
+
     const res = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelId,
         messages: [
-          ...messages.slice(0, 6).map((m) => ({ role: m.role, content: m.content })),
+          {
+            role: 'system',
+            content: 'You are a summarizer. Given a conversation transcript, reply with ONLY a short title (max 8 words) that describes the topic. No thinking, no explanation, no punctuation except what is needed. Just the title.',
+          },
           {
             role: 'user',
-            content: 'Summarize this conversation in one short sentence (max 10 words). Reply with only the summary, nothing else.',
+            content: transcript,
           },
         ],
-        max_tokens: 30,
+        max_tokens: 50,
       }),
     });
     if (!res.ok) return;
     const data = await res.json();
-    const summary = data.choices?.[0]?.message?.content?.trim();
-    if (summary) {
+    let summary = data.choices?.[0]?.message?.content?.trim() ?? '';
+    // Strip any <think> tags that thinking models might emit
+    summary = summary.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*/i, '').trim();
+    // Remove surrounding quotes if present
+    summary = summary.replace(/^["']|["']$/g, '').trim();
+    if (summary && summary.length > 0 && summary.length < 80) {
       useChatStore.getState().setSummary(convoId, summary);
     }
   } catch {
@@ -123,6 +136,7 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [modelCapabilities, setModelCapabilities] = useState<Record<string, string[]>>({});
+  const [modelContextLengths, setModelContextLengths] = useState<Record<string, number>>({});
 
   // Restore scroll position after store hydration + DOM render
   const chatScrollTop = useUIStore((s) => s.chatScrollTop);
@@ -155,7 +169,7 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
     }
   }, [setChatScrollTop]);
 
-  // Fetch model capabilities
+  // Fetch model capabilities and context lengths
   useEffect(() => {
     (async () => {
       try {
@@ -163,13 +177,18 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
         if (!res.ok) return;
         const data = await res.json();
         const caps: Record<string, string[]> = {};
+        const ctxLens: Record<string, number> = {};
         for (const m of data.data ?? []) {
           if (m.id && m.capabilities) caps[m.id] = m.capabilities;
+          if (m.id && m.context_length) ctxLens[m.id] = m.context_length;
         }
         setModelCapabilities(caps);
+        setModelContextLengths(ctxLens);
       } catch { /* ignore */ }
     })();
   }, []);
+
+  const contextLength = selectedModelId ? modelContextLengths[selectedModelId] ?? 0 : 0;
 
   const supportsThinking = selectedModelId
     ? (modelCapabilities[selectedModelId]?.includes('thinking_toggle') ?? false)
@@ -361,13 +380,8 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
     setIsLoading(false);
     abortRef.current = null;
 
-    // Trigger AI summary if conversation has enough exchanges
-    const convo = useChatStore.getState().conversations[
-      useChatStore.getState().activeConversationId!
-    ];
-    if (convo && !convo.summary && convo.messages.length >= 4) {
-      generateSummary(convo.id, convo.modelId, convo.messages);
-    }
+    // AI summary disabled for now — small models produce low-quality results
+    // TODO: revisit when larger models or smarter extraction is available
   }, [selectedModelId, isLoading, thinkingEnabled, addMessage]);
 
   const handleCancel = useCallback(() => {
@@ -454,6 +468,7 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
           modelSelector={modelSelector}
           ttftMs={ttftMs}
           tps={tps}
+          contextLength={contextLength}
           showThinkingToggle={supportsThinking}
           thinkingEnabled={thinkingEnabled}
           onToggleThinking={() => setThinkingEnabled((v) => !v)}

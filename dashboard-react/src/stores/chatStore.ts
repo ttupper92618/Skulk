@@ -84,19 +84,43 @@ export const useChatStore = create<ChatState>()(
         const state = get();
         const now = Date.now();
         const conversations = { ...state.conversations };
-
-        // Update timestamp on current conversation
-        if (state.activeConversationId && conversations[state.activeConversationId]) {
-          conversations[state.activeConversationId] = {
-            ...conversations[state.activeConversationId],
-            updatedAt: now,
-          };
-        }
+        const currentConvo = state.activeConversationId
+          ? conversations[state.activeConversationId]
+          : null;
 
         // If same model, no switch needed
         if (modelId === state.selectedModelId && state.activeConversationId) {
-          set({ conversations });
           return;
+        }
+
+        // If current conversation is empty, just re-assign it to the new model
+        // instead of creating a new one
+        if (currentConvo && currentConvo.messages.length === 0) {
+          const updatedConvo = { ...currentConvo, modelId, updatedAt: now };
+          conversations[currentConvo.id] = updatedConvo;
+
+          // Update model mapping
+          const modelMap = { ...state.modelToConversationId };
+          // Remove old model's pointer if it pointed here
+          if (modelMap[currentConvo.modelId] === currentConvo.id) {
+            delete modelMap[currentConvo.modelId];
+          }
+          modelMap[modelId] = currentConvo.id;
+
+          set({
+            conversations,
+            selectedModelId: modelId,
+            modelToConversationId: modelMap,
+          });
+          return;
+        }
+
+        // Current conversation has messages — save it and switch
+        if (currentConvo) {
+          conversations[currentConvo.id] = {
+            ...currentConvo,
+            updatedAt: now,
+          };
         }
 
         // Find or create conversation for new model
@@ -278,15 +302,10 @@ export const useChatStore = create<ChatState>()(
         const convo = state.conversations[conversationId];
         if (!convo) return;
 
-        // Update name if still default or auto-generated
-        const name = convo.name === 'New conversation' || convo.name.endsWith('...')
-          ? summary
-          : convo.name;
-
         set({
           conversations: {
             ...state.conversations,
-            [conversationId]: { ...convo, summary, name, updatedAt: Date.now() },
+            [conversationId]: { ...convo, summary, updatedAt: Date.now() },
           },
         });
       },

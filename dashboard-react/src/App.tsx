@@ -13,6 +13,7 @@ import { SettingsPanel } from './components/layout/SettingsPanel';
 import { ModelStorePage } from './components/pages/DownloadsPage';
 import { ChatView } from './components/pages/ChatView';
 import { InstancePanel, type InstanceCardData } from './components/layout/InstancePanel';
+import { ConversationPanel } from './components/layout/ConversationPanel';
 import { addToast } from './hooks/useToast';
 import type { InstanceStatus } from './components/cluster/RunningInstanceCard';
 import { useChatStore } from './stores/chatStore';
@@ -106,9 +107,20 @@ export function App() {
   const { topology, connected, downloads, nodeDisk, instances, runners } = useClusterState();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storeDownloads, setStoreDownloads] = useState<StoreDownload[]>([]);
-  const { activeRoute, panelOpen } = useUIStore();
+  const { activeRoute, panelOpen, historyPanelOpen } = useUIStore();
   const setActiveRoute = useUIStore((s) => s.setActiveRoute);
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const toggleHistoryPanel = useUIStore((s) => s.toggleHistoryPanel);
+  const conversationsMap = useChatStore((s) => s.conversations);
+  const allConversations = useMemo(
+    () => Object.values(conversationsMap).sort((a, b) => b.updatedAt - a.updatedAt),
+    [conversationsMap],
+  );
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const selectedModelId = useChatStore((s) => s.selectedModelId);
+  const selectConversation = useChatStore((s) => s.selectConversation);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const newConversation = useChatStore((s) => s.newConversation);
 
   // Poll store downloads for the header progress indicator
   const pollStoreDownloads = useCallback(async () => {
@@ -210,12 +222,24 @@ export function App() {
           onNavigate={setActiveRoute}
           onOpenSettings={() => setSettingsOpen(true)}
           downloadProgress={downloadProgress}
+          showSidebarToggle={activeRoute === 'chat' && allConversations.length > 0}
+          sidebarVisible={historyPanelOpen}
+          onToggleSidebar={toggleHistoryPanel}
           instanceCount={instanceCards.length}
           instancesHealthy={instanceCards.every((c) => c.status !== 'failed')}
           mobileRightOpen={panelOpen}
           onToggleMobileRight={togglePanel}
         />
         <ContentRow>
+          {activeRoute === 'chat' && allConversations.length > 0 && historyPanelOpen && (
+            <ConversationPanel
+              conversations={allConversations}
+              activeConversationId={activeConversationId}
+              onSelect={selectConversation}
+              onDelete={deleteConversation}
+              onNewChat={() => { if (selectedModelId) newConversation(selectedModelId); }}
+            />
+          )}
           <Main>
             <ClusterWarnings topology={topology} />
             {activeRoute === 'model-store' ? (
