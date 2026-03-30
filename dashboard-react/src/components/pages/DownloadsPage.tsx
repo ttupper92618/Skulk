@@ -161,7 +161,24 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
   const [storeDownloads, setStoreDownloads] = useState<StoreDownloadProgress[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
   const [placementModelId, setPlacementModelId] = useState<string | null>(null);
+  const [apiModelTags, setApiModelTags] = useState<Record<string, string[]>>({});
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  // Fetch model tags from /models API
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/models');
+        if (!res.ok) return;
+        const data = await res.json();
+        const tags: Record<string, string[]> = {};
+        for (const m of data.data ?? []) {
+          if (m.id && m.tags && m.tags.length > 0) tags[m.id] = m.tags;
+        }
+        setApiModelTags(tags);
+      } catch { /* ignore */ }
+    })();
+  }, []);
 
   // Extract model card info from download data for the store table tooltips
   const modelCards = useMemo<Record<string, ModelCardInfo>>(() => {
@@ -196,8 +213,16 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
         }
       }
     }
+    // Merge tags from /models API for models not in download state
+    for (const [mid, tags] of Object.entries(apiModelTags)) {
+      if (!cards[mid]) {
+        cards[mid] = { tags };
+      } else if (!cards[mid].tags || cards[mid].tags!.length === 0) {
+        cards[mid].tags = tags;
+      }
+    }
     return cards;
-  }, [downloads]);
+  }, [downloads, apiModelTags]);
 
   const fetchDownloads = useCallback(async () => {
     try {
