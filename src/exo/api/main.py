@@ -1995,9 +1995,13 @@ class API:
             raw = yaml.safe_load(f)
         if raw is None:
             raw = {}
+        # Mask sensitive fields before returning
+        safe_raw = dict(raw) if raw else {}
+        if "hf_token" in safe_raw and safe_raw["hf_token"]:
+            safe_raw["hf_token"] = "••••" + str(safe_raw["hf_token"])[-4:]
         return JSONResponse(
             {
-                "config": raw,
+                "config": safe_raw,
                 "configPath": str(self._config_path),
                 "fileExists": True,
                 "effective": {
@@ -2148,7 +2152,10 @@ class API:
         """Start an OptiQ mixed-precision optimization for a model."""
         if self._model_optimizer is None:
             raise HTTPException(status_code=503, detail="Model optimizer not available (store not configured)")
-        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
         target_bpw = float(body.get("target_bpw", 4.5))
         candidate_bits = body.get("candidate_bits", [4, 8])
         try:

@@ -605,7 +605,8 @@ export function StoreRegistryTable({
                       tags = ['optiq'];
                     }
                     return tags.length > 0 ? tags.map((tag) => {
-                      const colors = TAG_COLORS[tag] ?? TAG_COLORS.tensor;
+                      const colors = TAG_COLORS[tag];
+                      if (!colors) return null;
                       return <TagBadge key={tag} $color={colors.color} $bg={colors.bg} $border={colors.border}>{tag}</TagBadge>;
                     }) : null;
                   })()}
@@ -654,7 +655,7 @@ export function StoreRegistryTable({
                     filled
                     delay={100}
                   />
-                  {!active && onOptimize && !entry.model_id.toLowerCase().includes('optiq') && (
+                  {!active && onOptimize && !(modelCards?.[entry.model_id]?.tags ?? []).includes('optiq') && !entry.model_id.toLowerCase().includes('optiq') && (
                     <InfoTooltip content="Create an OptiQ mixed-precision version. Analyzes each layer's sensitivity and assigns precision individually for better quality." placement="left" delay={0}>
                       <Button variant="outline" size="sm" icon onClick={() => onOptimize(entry.model_id)} title="Optimize model">
                         <MdAutoFixHigh size={16} />
