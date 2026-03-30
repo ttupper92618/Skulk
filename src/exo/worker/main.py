@@ -257,6 +257,23 @@ class Worker:
                         runner.shutdown()
                         if instance_deleted:
                             await self._maybe_evict_shard(shard_for_eviction)
+                        elif shard_for_eviction is not None:
+                            # Runner crashed but instance still exists — reset
+                            # download status so the planner re-stages the model
+                            # instead of assuming it's still on disk.
+                            logger.info(
+                                f"Worker: resetting download status for "
+                                f"{shard_for_eviction.model_card.model_id} after runner crash"
+                            )
+                            await self.event_sender.send(
+                                NodeDownloadProgress(
+                                    download_progress=DownloadPending(
+                                        node_id=self.node_id,
+                                        shard_metadata=shard_for_eviction,
+                                        model_directory="",
+                                    )
+                                )
+                            )
                 case CancelTask(
                     cancelled_task_id=cancelled_task_id, runner_id=runner_id
                 ):
