@@ -256,16 +256,22 @@ export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose
     setSharding('Pipeline');
     setInstanceMeta('MlxRing');
 
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/instance/previews?model_id=${encodeURIComponent(modelId)}`);
-        if (res.ok) {
+        const res = await fetch(`/instance/previews?model_id=${encodeURIComponent(modelId)}`, {
+          signal: controller.signal,
+        });
+        if (res.ok && !controller.signal.aborted) {
           const data = await res.json();
           setPreviews(data.previews ?? data ?? []);
         }
-      } catch { /* ignore */ }
-      finally { setLoading(false); }
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      finally { if (!controller.signal.aborted) setLoading(false); }
     })();
+    return () => controller.abort();
   }, [open, modelId]);
 
   // Group previews by node count
