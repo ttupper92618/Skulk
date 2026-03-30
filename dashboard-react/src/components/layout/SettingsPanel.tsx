@@ -219,7 +219,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     && effective.kv_cache_backend !== 'default'
     && effective.kv_cache_backend !== (fullConfig?.inference?.kv_cache_backend ?? 'default');
   useEffect(() => {
-    if (fullConfig?.model_store) setDraft({ ...fullConfig.model_store });
+    setDraft(fullConfig?.model_store ? { ...fullConfig.model_store } : null);
     setKvBackend(effective?.kv_cache_backend ?? fullConfig?.inference?.kv_cache_backend ?? 'default');
   }, [fullConfig, effective]);
 
@@ -421,7 +421,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <option value="optiq">OptiQ (rotation-based)</option>
               <option value="turboquant_adaptive">TurboQuant Adaptive</option>
               <option value="turboquant">TurboQuant</option>
-              <option value="mlx_quantized">MLX Quantized</option>
+              <option value="mlx_quantized">MLX Quantized (requires EXO_KV_CACHE_BITS env)</option>
             </Select>
             {envOverride ? (
               <HintText>Overridden by EXO_KV_CACHE_BACKEND environment variable. Remove the env var to configure here.</HintText>
@@ -434,7 +434,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         <Footer>
           <Spacer />
           <Button variant="outline" size="md" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="md" loading={saving} onClick={handleSave} disabled={!draft}>
+          <Button variant="primary" size="md" loading={saving} onClick={handleSave}>
             Save
           </Button>
         </Footer>

@@ -68,7 +68,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
-from typing import final
+from typing import Literal, final
 
 import yaml
 
@@ -199,11 +199,12 @@ class InferenceConfig(FrozenModel):
     """Inference-related configuration.
 
     Attributes:
-        kv_cache_backend: KV cache backend to use. One of: default,
-            mlx_quantized, turboquant, turboquant_adaptive, optiq.
+        kv_cache_backend: KV cache backend to use.
     """
 
-    kv_cache_backend: str = "default"
+    kv_cache_backend: Literal[
+        "default", "mlx_quantized", "turboquant", "turboquant_adaptive", "optiq"
+    ] = "default"
 
 
 def load_exo_config(

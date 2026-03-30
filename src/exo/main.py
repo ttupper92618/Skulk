@@ -87,7 +87,7 @@ class Node:
         if (
             exo_config is not None
             and exo_config.inference is not None
-            and not os.environ.get("EXO_KV_CACHE_BACKEND")
+            and "EXO_KV_CACHE_BACKEND" not in os.environ
         ):
             os.environ["EXO_KV_CACHE_BACKEND"] = exo_config.inference.kv_cache_backend
             logger.info(
