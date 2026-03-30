@@ -28,6 +28,15 @@
 - **Storage recommendations:** Skulk can show available disk space per volume in the directory browser, highlight the best option, and warn on low space.
 - **Manual shard placement:** Skulk allows youu to control which layers run on which nodes, and you can adjust sharding to target specific machines and manage memory pressure on a per-node basis.
 - **Sub-cluster definitions:** Skulk allows you to define node groups so a model can be targeted to only certain nodes, enabling model-specific sub-clusters within a single physical cluster (e.g. dedicate 2 nodes to a coding model and 2 to a chat model simultaneously).
+- **Skulk Dashboard (React):** Full-featured React dashboard with cluster topology visualization, model store management, chat interface with streaming, thinking support, conversation persistence, and placement manager.
+- **Chat Interface:** Stream chat with models directly from the dashboard with real-time TTFT/TPS/ms-per-tok stats, thinking block rendering, conversation history with per-model scoping, and session recovery on refresh.
+- **Placement Manager:** Visual cluster placement configurator — select node count, sharding mode (Pipeline/Tensor), and networking (Ring/Jaccl) with real-time availability validation and error explanations.
+- **OptiQ Integration:** Integrated mlx-optiq for rotation-based KV cache quantization (configurable in Settings) and mixed-precision weight optimization via sensitivity analysis.
+- **HuggingFace Token Management:** Configure your HF API token from the settings panel — synced to all nodes automatically.
+- **Smart Model Tags:** Models tagged with OptiQ, Thinking, and Tensor badges in the store registry.
+- **Context Window Display:** Model context window size shown in chat header, derived from config.json.
+- **Cluster Warnings:** Consolidated warning indicator in header for version mismatches and RDMA issues.
+- **Static Peer Discovery:** `--bootstrap-peers` CLI arg for fixed cluster topology.
 
 ---
 ## About EXO
@@ -147,8 +156,18 @@ Skulk includes opt-in KV cache backends for MLX text generation:
 - `mlx_quantized`: MLX LM's built-in `QuantizedKVCache`
 - `turboquant`: a correctness-first TurboQuant-inspired KV cache for standard `KVCache` layers
 - `turboquant_adaptive`: keeps the first and last KV layers in FP16 and applies TurboQuant only to middle KV layers
+- `optiq`: rotation-based KV cache quantization via [mlx-optiq](https://github.com/mlx-explore/mlx-optiq)
 
 Current recommended experimental setting:
+
+```bash
+EXO_KV_CACHE_BACKEND=optiq \
+EXO_OPTIQ_BITS=4 \
+EXO_OPTIQ_FP16_LAYERS=4 \
+uv run exo
+```
+
+The `optiq` backend uses mlx-optiq's rotation-based quantization for the best quality-to-memory tradeoff. As a proven alternative, `turboquant_adaptive` remains a solid choice:
 
 ```bash
 EXO_KV_CACHE_BACKEND=turboquant_adaptive \
@@ -157,6 +176,8 @@ EXO_TQ_V_BITS=4 \
 EXO_TQ_FP16_LAYERS=4 \
 uv run exo
 ```
+
+**Note:** KV cache backends can now also be configured from the Settings panel in the dashboard without needing to set environment variables.
 
 Important notes:
 
@@ -246,49 +267,6 @@ Skulk follows the [XDG Base Directory Specification](https://specifications.free
 
 You can override these locations by setting the corresponding XDG environment variables.
 
-### macOS App
-
-Skulk ships a macOS app that runs in the background on your Mac.
-
-<img src="docs/imgs/macos-app-one-macbook.png" alt="Skulk macOS App - running on a MacBook" width="35%" />
-
-The macOS app requires macOS Tahoe 26.2 or later.
-
-Download the latest build here: [EXO-latest.dmg](https://assets.exolabs.net/EXO-latest.dmg).
-
-The app will ask for permission to modify system settings and install a new Network profile. Improvements to this are being worked on.
-
-**Custom Namespace for Cluster Isolation:**
-
-The macOS app includes a custom namespace feature that allows you to isolate your cluster from others on the same network. This is configured through the `EXO_LIBP2P_NAMESPACE` setting:
-
-- **Use cases**:
-  - Running multiple separate clusters on the same network
-  - Isolating development/testing clusters from production clusters
-  - Preventing accidental cluster joining
-
-- **Configuration**: Access this setting in the app's Advanced settings (or set the `EXO_LIBP2P_NAMESPACE` environment variable when running from source)
-
-The namespace is logged on startup for debugging purposes.
-
-#### Uninstalling the macOS App
-
-The recommended way to uninstall is through the app itself: click the menu bar icon → Advanced → Uninstall. This cleanly removes all system components.
-
-If you've already deleted the app, you can run the standalone uninstaller script:
-
-```bash
-sudo ./app/EXO/uninstall-exo.sh
-```
-
-This removes:
-- Network setup LaunchDaemon
-- Network configuration script
-- Log files
-- The "exo" network location
-
-**Note:** You'll need to manually remove EXO from Login Items in System Settings → General → Login Items.
-
 ---
 
 ### Enabling RDMA on macOS
@@ -335,12 +313,16 @@ Skulk supports several environment variables for configuration:
 | `EXO_LIBP2P_NAMESPACE` | Custom namespace for cluster isolation | None |
 | `EXO_FAST_SYNCH` | Control MLX_METAL_FAST_SYNCH behavior (for JACCL backend) | Auto |
 | `EXO_TRACING_ENABLED` | Enable distributed tracing for performance analysis | `false` |
-| `EXO_KV_CACHE_BACKEND` | Select KV cache backend: `default`, `mlx_quantized`, `turboquant`, or `turboquant_adaptive` | `default` |
+| `EXO_KV_CACHE_BACKEND` | Select KV cache backend: `default`, `mlx_quantized`, `turboquant`, `turboquant_adaptive`, or `optiq` | `default` |
 | `EXO_KV_CACHE_BITS` | Bit width for MLX built-in quantized KV cache. Required when `EXO_KV_CACHE_BACKEND=mlx_quantized` | None |
 | `EXO_TQ_K_BITS` | Key-cache bit width for TurboQuant backends | `3` |
 | `EXO_TQ_V_BITS` | Value-cache bit width for TurboQuant backends | `4` |
 | `EXO_TQ_FP16_LAYERS` | Number of KV layers at each edge kept in FP16 for `turboquant_adaptive` | `4` |
 | `EXO_NO_BATCH` | Disable batch generation. Quantized KV backends currently force this behavior automatically as a temporary fallback | `false` |
+| `EXO_OPTIQ_BITS` | Bit width for mlx-optiq KV cache | `4` |
+| `EXO_OPTIQ_FP16_LAYERS` | Edge layers kept in FP16 for optiq | `4` |
+| `EXO_BOOTSTRAP_PEERS` | Comma-separated libp2p multiaddrs for static peer discovery | None |
+| `HF_TOKEN` | HuggingFace API token (can also be set in Settings panel) | None |
 
 **Example usage:**
 
