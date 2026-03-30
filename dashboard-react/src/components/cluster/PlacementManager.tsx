@@ -284,13 +284,23 @@ export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose
     }
 
     for (const p of previews) {
-      const count = p.instance ? extractNodeCount(p) : 1;
       const key = comboKey(p.sharding, p.instance_meta);
-      if (!map[count]) continue;
 
-      map[count][key] = p.error
-        ? { available: false, error: p.error }
-        : { available: true, preview: p };
+      if (p.instance && !p.error) {
+        // Successful placement — map to the actual node count
+        const count = extractNodeCount(p);
+        if (map[count]) {
+          map[count][key] = { available: true, preview: p };
+        }
+      } else if (p.error) {
+        // Error preview — no instance, so apply error to all node counts
+        // that don't already have a successful placement for this combo
+        for (let n = 1; n <= totalNodes; n++) {
+          if (map[n] && !map[n][key].available) {
+            map[n][key] = { available: false, error: p.error };
+          }
+        }
+      }
     }
 
     return map;

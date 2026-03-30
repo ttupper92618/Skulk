@@ -567,7 +567,7 @@ export function StoreRegistryTable({
                 </PlayCell>
                 <PlayCell>
                   {!active && !dl && onPlacement ? (
-                    <PlacementBtn onClick={() => onPlacement(entry.model_id)} title="Configure placement">
+                    <PlacementBtn onClick={() => onPlacement(entry.model_id)} title="Configure placement" aria-label="Configure placement">
                       <MdTune size={18} />
                     </PlacementBtn>
                   ) : null}
