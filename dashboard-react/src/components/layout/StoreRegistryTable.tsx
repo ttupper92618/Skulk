@@ -654,29 +654,13 @@ export function StoreRegistryTable({
                     filled
                     delay={100}
                   />
-                  {!active && onOptimize && (() => {
-                    const mid = entry.model_id.toLowerCase();
-                    const isOptiq = mid.includes('optiq');
-                    const quant = modelCards?.[entry.model_id]?.quantization?.toLowerCase() ?? '';
-                    const isHighPrecision = quant.includes('bf16') || quant.includes('fp16') || quant.includes('8bit') || quant === '';
-                    const is4bit = quant.includes('4bit') || quant.includes('3bit');
-                    if (isOptiq) return null;
-                    if (isHighPrecision) return (
-                      <InfoTooltip content="Create an OptiQ mixed-precision version. Analyzes each layer's sensitivity and assigns precision individually for better quality at smaller size." placement="left" delay={0}>
-                        <Button variant="outline" size="sm" icon onClick={() => onOptimize(entry.model_id)} title="Optimize model">
-                          <MdAutoFixHigh size={16} />
-                        </Button>
-                      </InfoTooltip>
-                    );
-                    if (is4bit) return (
-                      <InfoTooltip content="OptiQ works best from bf16 or 8-bit source weights. Download a higher-precision version for optimal results." placement="left" delay={0}>
-                        <span style={{ opacity: 0.3, display: 'flex' }}>
-                          <MdAutoFixHigh size={16} />
-                        </span>
-                      </InfoTooltip>
-                    );
-                    return null;
-                  })()}
+                  {!active && onOptimize && !entry.model_id.toLowerCase().includes('optiq') && (
+                    <InfoTooltip content="Create an OptiQ mixed-precision version. Analyzes each layer's sensitivity and assigns precision individually for better quality." placement="left" delay={0}>
+                      <Button variant="outline" size="sm" icon onClick={() => onOptimize(entry.model_id)} title="Optimize model">
+                        <MdAutoFixHigh size={16} />
+                      </Button>
+                    </InfoTooltip>
+                  )}
                   <Button variant="danger" size="sm" icon onClick={() => onDelete(entry, active)} title="Delete model">
                     <FiTrash2 size={18} />
                   </Button>
