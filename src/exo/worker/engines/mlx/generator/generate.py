@@ -55,6 +55,7 @@ from exo.worker.engines.mlx.utils_mlx import (
     apply_chat_template,
     fix_unmatched_think_end_tokens,
     mx_barrier,
+    system_prompt_token_count,
 )
 from exo.worker.runner.bootstrap import logger
 
@@ -471,6 +472,7 @@ def mlx_generate(
     # Encode prompt once at the top and fix unmatched think tags
     all_prompt_tokens = encode_prompt(tokenizer, prompt)
     all_prompt_tokens = fix_unmatched_think_end_tokens(all_prompt_tokens, tokenizer)
+    min_prefix_hit_length = max(1000, system_prompt_token_count(task, tokenizer))
 
     # Do not use the prefix cache if we are trying to do benchmarks.
     is_bench = task.bench
@@ -660,8 +662,8 @@ def mlx_generate(
                     else 0.0
                 )
                 if matched_index is not None and (
-                    prefix_hit_length > 1000
-                    or hit_ratio >= _MIN_PREFIX_HIT_RATIO_TO_UPDATE
+                    prefix_hit_length >= min_prefix_hit_length
+                    and hit_ratio >= _MIN_PREFIX_HIT_RATIO_TO_UPDATE
                 ):
                     kv_prefix_cache.update_kv_cache(
                         matched_index,

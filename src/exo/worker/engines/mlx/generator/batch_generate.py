@@ -38,7 +38,10 @@ from exo.worker.engines.mlx.generator.generate import (
     extract_top_logprobs,
     prefill,
 )
-from exo.worker.engines.mlx.utils_mlx import fix_unmatched_think_end_tokens
+from exo.worker.engines.mlx.utils_mlx import (
+    fix_unmatched_think_end_tokens,
+    system_prompt_token_count,
+)
 from exo.worker.runner.bootstrap import logger
 
 _MIN_PREFIX_HIT_RATIO_TO_UPDATE = 0.5
@@ -170,12 +173,16 @@ class ExoBatchGenerator:
                 c._idx = c.max_size
 
         if not is_bench:
+            min_prefix_hit_length = max(
+                1000, system_prompt_token_count(task_params, self.tokenizer)
+            )
             self._save_prefix_cache(
                 all_prompt_tokens,
                 list(cache),
                 cache_snapshots,
                 prefix_hit_length,
                 matched_index,
+                min_prefix_hit_length,
             )
 
         last_tokens = prompt_tokens[-2:]
@@ -383,6 +390,7 @@ class ExoBatchGenerator:
         cache_snapshots: list[CacheSnapshot] | None,
         prefix_hit_length: int,
         matched_index: int | None,
+        min_prefix_hit_length: int = 1000,
     ) -> None:
         if self.kv_prefix_cache is None:
             return
@@ -394,7 +402,8 @@ class ExoBatchGenerator:
                 else 0.0
             )
             if matched_index is not None and (
-                prefix_hit_length > 1000 or hit_ratio >= _MIN_PREFIX_HIT_RATIO_TO_UPDATE
+                prefix_hit_length >= min_prefix_hit_length
+                and hit_ratio >= _MIN_PREFIX_HIT_RATIO_TO_UPDATE
             ):
                 self.kv_prefix_cache.update_kv_cache(
                     matched_index,
