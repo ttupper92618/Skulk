@@ -1611,7 +1611,7 @@ class API:
                     hugging_face_id=card.model_id,
                     name=card.model_id.short(),
                     description="",
-                    tags=[],
+                    tags=self._model_tags(card),
                     storage_size_megabytes=card.storage_size.in_mb,
                     supports_tensor=card.supports_tensor,
                     tasks=[task.value for task in card.tasks],
@@ -1621,7 +1621,6 @@ class API:
                     base_model=card.base_model,
                     capabilities=card.capabilities,
                     context_length=card.context_length,
-                    tags=self._model_tags(card),
                 )
                 for card in cards
             ]
