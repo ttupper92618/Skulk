@@ -181,12 +181,17 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
           if (!raw) continue;
           const mid = (raw.modelId ?? raw.model_id) as string | undefined;
           if (!mid || cards[mid]) continue;
+          const tags: string[] = [];
+          if (mid.toLowerCase().includes('optiq') || (raw.quantization as string ?? '').toLowerCase().includes('optiq')) tags.push('optiq');
+          if ((raw.capabilities as string[] ?? []).includes('thinking')) tags.push('thinking');
+          if ((raw.supportsTensor ?? raw.supports_tensor) as boolean) tags.push('tensor');
           cards[mid] = {
             family: raw.family as string | undefined,
             quantization: raw.quantization as string | undefined,
             baseModel: (raw.baseModel ?? raw.base_model) as string | undefined,
             supportsTensor: (raw.supportsTensor ?? raw.supports_tensor) as boolean | undefined,
             capabilities: raw.capabilities as string[] | undefined,
+            tags,
           };
         }
       }

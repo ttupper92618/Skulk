@@ -31,6 +31,7 @@ export interface ModelCardInfo {
   baseModel?: string;
   supportsTensor?: boolean;
   capabilities?: string[];
+  tags?: string[];
 }
 
 export interface StoreRegistryTableProps {
@@ -213,6 +214,26 @@ const ActiveDot = styled.span`
   border-radius: 50%;
   background: ${({ theme }) => theme.colors.gold};
   animation: ${pulse} 1.5s ease-in-out infinite;
+`;
+
+const TAG_COLORS: Record<string, { color: string; bg: string; border: string }> = {
+  optiq: { color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.1)', border: 'rgba(167, 139, 250, 0.3)' },
+  thinking: { color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.1)', border: 'rgba(96, 165, 250, 0.3)' },
+  tensor: { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)', border: 'rgba(52, 211, 153, 0.3)' },
+};
+
+const TagBadge = styled.span<{ $color: string; $bg: string; $border: string }>`
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: ${({ theme }) => theme.fonts.body};
+  font-weight: 500;
+  color: ${({ $color }) => $color};
+  background: ${({ $bg }) => $bg};
+  border: 1px solid ${({ $border }) => $border};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 0 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 `;
 
 const ChatBubble = styled.button`
@@ -574,6 +595,17 @@ export function StoreRegistryTable({
                 </PlayCell>
                 <ModelCell>
                   <ModelId title={entry.model_id}>{entry.model_id}</ModelId>
+                  {(() => {
+                    let tags = modelCards?.[entry.model_id]?.tags ?? [];
+                    // Fallback: detect from model ID if no card data
+                    if (tags.length === 0 && entry.model_id.toLowerCase().includes('optiq')) {
+                      tags = ['optiq'];
+                    }
+                    return tags.length > 0 ? tags.map((tag) => {
+                      const colors = TAG_COLORS[tag] ?? TAG_COLORS.tensor;
+                      return <TagBadge key={tag} $color={colors.color} $bg={colors.bg} $border={colors.border}>{tag}</TagBadge>;
+                    }) : null;
+                  })()}
                   {active && (() => {
                     const card = clusterCards[entry.model_id];
                     const ready = card?.isReady ?? false;

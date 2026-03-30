@@ -1568,6 +1568,23 @@ class API:
 
         return total_available
 
+    @staticmethod
+    def _model_tags(card: "ModelCard") -> list[str]:
+        """Derive display tags from model metadata."""
+        tags: list[str] = []
+        model_id_lower = str(card.model_id).lower()
+        quant_lower = card.quantization.lower()
+        # OptiQ mixed-precision models
+        if "optiq" in model_id_lower or "optiq" in quant_lower:
+            tags.append("optiq")
+        # Thinking capability
+        if "thinking" in card.capabilities:
+            tags.append("thinking")
+        # Tensor parallel support
+        if card.supports_tensor:
+            tags.append("tensor")
+        return tags
+
     async def get_models(self, status: str | None = Query(default=None)) -> ModelList:
         """Returns list of available models, optionally filtered by being downloaded."""
         cards = await get_model_cards()
@@ -1597,6 +1614,7 @@ class API:
                     base_model=card.base_model,
                     capabilities=card.capabilities,
                     context_length=card.context_length,
+                    tags=self._model_tags(card),
                 )
                 for card in cards
             ]
