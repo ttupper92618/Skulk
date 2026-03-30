@@ -143,11 +143,21 @@ class Worker:
                     )
 
                 if isinstance(event, CustomModelCardAdded):
-                    await event.model_card.save_to_custom_dir()
-                    add_to_card_cache(event.model_card)
+                    try:
+                        await event.model_card.save_to_custom_dir()
+                        add_to_card_cache(event.model_card)
+                    except Exception:
+                        logger.exception(
+                            f"Failed to save custom model card (model_id={event.model_card.model_id})"
+                        )
 
                 if isinstance(event, CustomModelCardDeleted):
-                    await delete_custom_card(event.model_id)
+                    try:
+                        await delete_custom_card(event.model_id)
+                    except Exception:
+                        logger.exception(
+                            f"Failed to delete custom model card (model_id={event.model_id})"
+                        )
 
     async def plan_step(self):
         while True:

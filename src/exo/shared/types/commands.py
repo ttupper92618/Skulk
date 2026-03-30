@@ -102,8 +102,10 @@ class DeleteCustomModelCard(BaseCommand):
 
 
 DownloadCommand = (
-    StartDownload | DeleteDownload | CancelDownload | SyncConfig | PurgeStagingCache | AddCustomModelCard | DeleteCustomModelCard
+    StartDownload | DeleteDownload | CancelDownload | SyncConfig | PurgeStagingCache
 )
+
+CustomModelCardCommand = AddCustomModelCard | DeleteCustomModelCard
 
 
 Command = (
