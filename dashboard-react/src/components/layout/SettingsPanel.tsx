@@ -208,6 +208,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { fullConfig, effective, configPath, loading, saving, error, fetchConfig, saveFullConfig } = useConfig();
   const [draft, setDraft] = useState<StoreConfig | null>(null);
   const [kvBackend, setKvBackend] = useState('default');
+  const [hfToken, setHfToken] = useState('');
 
   // Fetch config when panel opens
   useEffect(() => {
@@ -221,6 +222,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   useEffect(() => {
     setDraft(fullConfig?.model_store ? { ...fullConfig.model_store } : null);
     setKvBackend(effective?.kv_cache_backend ?? fullConfig?.inference?.kv_cache_backend ?? 'default');
+    setHfToken(fullConfig?.hf_token ?? '');
   }, [fullConfig, effective]);
 
   const update = useCallback((patch: Partial<StoreConfig>) => {
@@ -240,6 +242,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const updated: FullConfig = { ...(fullConfig ?? {}) };
     if (draft) updated.model_store = draft;
     updated.inference = { kv_cache_backend: kvBackend };
+    if (hfToken) updated.hf_token = hfToken;
     const ok = await saveFullConfig(updated);
     if (ok) {
       addToast({ type: 'success', message: 'Settings saved — KV cache change takes effect on next model launch' });
@@ -429,6 +432,28 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             ) : (
               <HintText>Changes take effect on the next model launch. Models with incompatible architectures (GQA, non-power-of-two head_dim) will automatically fall back to default.</HintText>
             )}
+          </Fieldset>
+
+          {/* HuggingFace */}
+          <Fieldset>
+            <Legend>HuggingFace</Legend>
+            <Row>
+              <FieldLabel>
+                API Token
+                <InfoTooltip
+                  filled
+                  content="Your HuggingFace API token enables faster downloads, higher rate limits, and access to gated models. Get one at huggingface.co/settings/tokens"
+                />
+              </FieldLabel>
+              <StyledField
+                size="sm"
+                type="password"
+                value={hfToken}
+                onChange={(e) => setHfToken((e.target as HTMLInputElement).value)}
+                placeholder="hf_..."
+              />
+            </Row>
+            <HintText>Synced to all nodes. Env var HF_TOKEN takes precedence if set.</HintText>
           </Fieldset>
         </Body>
 

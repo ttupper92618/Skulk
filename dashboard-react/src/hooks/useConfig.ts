@@ -23,6 +23,7 @@ export interface InferenceConfig {
 export interface FullConfig {
   model_store?: StoreConfig;
   inference?: InferenceConfig;
+  hf_token?: string;
 }
 
 export interface EffectiveConfig {

@@ -2032,6 +2032,10 @@ class API:
         if isinstance(inference, dict) and "kv_cache_backend" in inference:
             if not os.environ.get("_EXO_KV_BACKEND_USER_SET"):
                 os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+        # Apply HF token immediately
+        hf_token = config_data.get("hf_token")
+        if hf_token and "HF_TOKEN" not in os.environ:
+            os.environ["HF_TOKEN"] = str(hf_token)
         # model_store changes still require restart; inference-only changes don't
         has_store_changes = "model_store" in config_data
         return JSONResponse(
