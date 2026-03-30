@@ -110,8 +110,17 @@ class ModelOptimizer:
         except Exception as exc:
             job.status = "failed"
             job.progress = 0.0
-            job.error = str(exc)
-            job.message = f"Optimization failed: {exc}"
+            error_str = str(exc)
+            # Provide user-friendly messages for known errors
+            if "Unrecognized configuration class" in error_str:
+                job.error = "This model architecture is not supported by OptiQ optimization."
+                job.message = "Unsupported model architecture"
+            elif "trust_remote_code" in error_str.lower():
+                job.error = "This model requires trust_remote_code which is disabled for security."
+                job.message = "Model requires remote code execution"
+            else:
+                job.error = error_str
+                job.message = f"Optimization failed: {error_str[:100]}"
             logger.error(f"ModelOptimizer: {model_id} optimization failed: {exc}")
             # Clean up partial output
             if output_dir.exists():
