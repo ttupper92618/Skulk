@@ -403,6 +403,23 @@ def make_kv_cache(
                 "Install with: pip install mlx-optiq"
             ) from exc
 
+        def _is_power_of_two(n: int) -> bool:
+            return n > 0 and (n & (n - 1)) == 0
+
+        # Check head_dim compatibility before patching attention
+        if len(model.layers) > 0:
+            sample_layer = model.layers[0]
+            sample_attn = getattr(sample_layer, "self_attn", sample_layer)
+            sample_head_dim = getattr(sample_attn, "head_dim", 128)
+            if not _is_power_of_two(sample_head_dim):
+                logger.warning(
+                    f"mlx-optiq requires power-of-two head_dim but model has head_dim={sample_head_dim}; "
+                    f"falling back to default KV cache"
+                )
+                if hasattr(model, "make_cache"):
+                    return model.make_cache()  # type: ignore
+                return [KVCache() for _ in model.layers]
+
         patch_attention()
         logger.info(f"Using mlx-optiq KV cache with bits={OPTIQ_BITS}")
 
@@ -411,9 +428,6 @@ def make_kv_cache(
                 list[object],
                 model.make_cache(),  # type: ignore[reportUnknownMemberType]
             )
-            # Count KV layers separately so edge detection and seeding
-            # are based on KV position, not template index (which may
-            # include ArraysCache/RotatingKVCache entries).
             num_kv = sum(1 for entry in template_cache if isinstance(entry, KVCache))
             kv_pos = -1
             caches: list[object] = []
