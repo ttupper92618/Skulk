@@ -21,6 +21,8 @@ from exo.worker.engines.mlx.constants import (
     DEFAULT_TURBOQUANT_V_BITS,
     KV_CACHE_BACKEND,
     KV_CACHE_BITS,
+    OPTIQ_BITS,
+    OPTIQ_FP16_LAYERS,
     TURBOQUANT_FP16_LAYERS,
     TURBOQUANT_K_BITS,
     TURBOQUANT_V_BITS,
@@ -389,6 +391,62 @@ def make_kv_cache(
             value_bits=value_bits,
         )
 
+    if backend == "optiq":
+        try:
+            from optiq.core.turbo_kv_cache import (  # type: ignore[import-untyped]
+                TurboQuantKVCache as OptiqKVCache,
+                patch_attention,
+            )
+        except ImportError as exc:
+            raise RuntimeError(
+                "EXO_KV_CACHE_BACKEND=optiq requires mlx-optiq to be installed. "
+                "Install with: pip install mlx-optiq"
+            ) from exc
+
+        patch_attention()
+        logger.info(f"Using mlx-optiq KV cache with bits={OPTIQ_BITS}")
+
+        if hasattr(model, "make_cache"):
+            template_cache = cast(
+                list[object],
+                model.make_cache(),  # type: ignore[reportUnknownMemberType]
+            )
+            # Count KV layers separately so edge detection and seeding
+            # are based on KV position, not template index (which may
+            # include ArraysCache/RotatingKVCache entries).
+            num_kv = sum(1 for entry in template_cache if isinstance(entry, KVCache))
+            kv_pos = -1
+            caches: list[object] = []
+            for layer_i, entry in enumerate(template_cache):
+                if isinstance(entry, KVCache):
+                    kv_pos += 1
+                    is_edge = kv_pos < OPTIQ_FP16_LAYERS or kv_pos >= max(num_kv - OPTIQ_FP16_LAYERS, 0)
+                    if is_edge:
+                        caches.append(KVCache())
+                    else:
+                        if 0 <= layer_i < len(model.layers):
+                            attn = getattr(model.layers[layer_i], "self_attn", model.layers[layer_i])
+                            head_dim = getattr(attn, "head_dim", 128)
+                        else:
+                            head_dim = 128
+                        caches.append(OptiqKVCache(head_dim=head_dim, bits=OPTIQ_BITS, seed=42 + kv_pos))
+                else:
+                    caches.append(entry)
+            return caches
+
+        if len(model.layers) > 0:
+            first_layer = model.layers[0]
+            attn = getattr(first_layer, "self_attn", first_layer)
+            head_dim = getattr(attn, "head_dim", 128)
+        else:
+            head_dim = 128
+        n_layers = len(model.layers)
+        return [
+            KVCache() if (i < OPTIQ_FP16_LAYERS or i >= n_layers - OPTIQ_FP16_LAYERS)
+            else OptiqKVCache(head_dim=head_dim, bits=OPTIQ_BITS, seed=42 + i)
+            for i, _ in enumerate(model.layers)
+        ]
+
     if hasattr(model, "make_cache"):
         logger.info("Using MLX LM's make cache")
         return model.make_cache()  # type: ignore
@@ -404,6 +462,7 @@ def get_kv_cache_backend() -> KVCacheBackend:
         "mlx_quantized",
         "turboquant",
         "turboquant_adaptive",
+        "optiq",
     )
     if backend not in valid_backends:
         logger.warning(
