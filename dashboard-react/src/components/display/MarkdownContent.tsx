@@ -83,7 +83,8 @@ function processMarkdown(content: string): ProcessedMarkdown {
         return `<div class="mc-code-block"><div class="mc-code-header"><span class="mc-code-lang">${langLabel}</span><button class="mc-copy-btn" data-code="${encodeURIComponent(text)}">Copy</button></div><pre><code class="hljs">${highlighted}</code></pre></div>`;
       },
       codespan({ text }: { text: string }) {
-        return `<code class="mc-inline-code">${text}</code>`;
+        const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<code class="mc-inline-code">${escaped}</code>`;
       },
     },
   });
