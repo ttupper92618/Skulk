@@ -163,6 +163,7 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
   const [placementModelId, setPlacementModelId] = useState<string | null>(null);
   const [apiModelTags, setApiModelTags] = useState<Record<string, string[]>>({});
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const optimizePollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Fetch model tags from /models API
   useEffect(() => {
@@ -278,6 +279,7 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (optimizePollRef.current) clearInterval(optimizePollRef.current);
     };
   }, []);
 
@@ -469,7 +471,8 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
       });
       if (res.ok) {
         addToast({ type: 'success', message: `OptiQ optimization started for ${modelId}` });
-        // Poll for completion/failure
+        // Poll for completion/failure (tracked for cleanup on unmount)
+        if (optimizePollRef.current) clearInterval(optimizePollRef.current);
         const pollInterval = setInterval(async () => {
           try {
             const statusRes = await fetch(`/store/models/${encodeURIComponent(modelId)}/optimize/status`);
@@ -483,8 +486,9 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
               clearInterval(pollInterval);
               addToast({ type: 'error', message: status.error ?? 'Optimization failed' });
             }
-          } catch { clearInterval(pollInterval); }
+          } catch { clearInterval(pollInterval); optimizePollRef.current = undefined; }
         }, 5000);
+        optimizePollRef.current = pollInterval;
       } else {
         const err = await res.json().catch(() => ({}));
         addToast({ type: 'error', message: (err as Record<string, string>).detail ?? 'Failed to start optimization' });

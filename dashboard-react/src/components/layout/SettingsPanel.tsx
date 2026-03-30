@@ -244,7 +244,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const updated: FullConfig = { ...(fullConfig ?? {}) };
     if (draft) updated.model_store = draft;
     updated.inference = { kv_cache_backend: kvBackend };
-    if (hfToken) updated.hf_token = hfToken;
+    // Only send hf_token when user entered a new one
+    if (hfToken && hfToken !== '') updated.hf_token = hfToken;
     const ok = await saveFullConfig(updated);
     if (ok) {
       addToast({ type: 'success', message: 'Settings saved — KV cache change takes effect on next model launch' });
@@ -452,10 +453,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 type="password"
                 value={hfToken}
                 onChange={(e) => setHfToken((e.target as HTMLInputElement).value)}
-                placeholder="hf_..."
+                placeholder={effective?.has_hf_token ? "Token is set — enter new to replace" : "hf_..."}
               />
             </Row>
-            <HintText>Synced to all nodes. Env var HF_TOKEN takes precedence if set.</HintText>
+            <HintText>
+              {effective?.has_hf_token ? 'Token is configured. ' : ''}
+              Synced to all nodes. Env var HF_TOKEN takes precedence if set.
+            </HintText>
           </Fieldset>
         </Body>
 

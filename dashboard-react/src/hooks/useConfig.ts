@@ -28,6 +28,7 @@ export interface FullConfig {
 
 export interface EffectiveConfig {
   kv_cache_backend: string;
+  has_hf_token?: boolean;
 }
 
 export interface ConfigResponse {

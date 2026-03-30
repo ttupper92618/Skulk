@@ -1995,10 +1995,9 @@ class API:
             raw = yaml.safe_load(f)
         if raw is None:
             raw = {}
-        # Mask sensitive fields before returning
+        # Remove sensitive fields — token is managed separately
         safe_raw = dict(raw) if raw else {}
-        if "hf_token" in safe_raw and safe_raw["hf_token"]:
-            safe_raw["hf_token"] = "••••" + str(safe_raw["hf_token"])[-4:]
+        has_hf_token = bool(safe_raw.pop("hf_token", None))
         return JSONResponse(
             {
                 "config": safe_raw,
@@ -2006,6 +2005,7 @@ class API:
                 "fileExists": True,
                 "effective": {
                     "kv_cache_backend": os.environ.get("EXO_KV_CACHE_BACKEND", "default"),
+                    "has_hf_token": has_hf_token or "HF_TOKEN" in os.environ,
                 },
             }
         )
@@ -2013,6 +2013,16 @@ class API:
     async def update_config(self, request: Request) -> JSONResponse:
         body = await request.json()
         config_data = body.get("config", body)
+        # Preserve existing hf_token if not provided in this update
+        # (GET /config strips it for security, so saves won't have it)
+        if "hf_token" not in config_data and self._config_path.exists():
+            try:
+                with self._config_path.open() as f:
+                    existing = yaml.safe_load(f) or {}
+                if "hf_token" in existing:
+                    config_data["hf_token"] = existing["hf_token"]
+            except Exception:
+                pass
         # Validate by attempting to parse with Pydantic
         from exo.store.config import ExoConfig
 
