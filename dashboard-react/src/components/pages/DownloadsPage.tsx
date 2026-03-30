@@ -435,6 +435,24 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
     }
   }, [loadRegistry]);
 
+  const handleOptimize = useCallback(async (modelId: string) => {
+    try {
+      const res = await fetch(`/store/models/${encodeURIComponent(modelId)}/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_bpw: 4.5, candidate_bits: [4, 8] }),
+      });
+      if (res.ok) {
+        addToast({ type: 'success', message: `OptiQ optimization started for ${modelId}` });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        addToast({ type: 'error', message: (err as Record<string, string>).detail ?? 'Failed to start optimization' });
+      }
+    } catch {
+      addToast({ type: 'error', message: 'Failed to start optimization' });
+    }
+  }, []);
+
   return (
     <Container>
       {purgeConfirm && (
@@ -486,6 +504,7 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
           onPlacement={setPlacementModelId}
           clusterCards={clusterCards}
           totalClusterMemoryBytes={totalClusterMemoryBytes}
+          onOptimize={handleOptimize}
         />
       <ModelSearchModal
         open={searchOpen}

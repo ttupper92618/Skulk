@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { FiTrash2, FiExternalLink, FiRefreshCw } from 'react-icons/fi';
-import { MdPlayArrow, MdClose, MdTune } from 'react-icons/md';
+import { MdPlayArrow, MdClose, MdTune, MdAutoFixHigh } from 'react-icons/md';
 import { BsChatDotsFill } from 'react-icons/bs';
 import { formatBytes } from '../../utils/format';
 import { Button } from '../common/Button';
@@ -50,6 +50,7 @@ export interface StoreRegistryTableProps {
   clusterCards?: Record<string, Omit<ClusterCardProps, 'onLaunch'>>;
   /** Total available cluster RAM in bytes — used to disable launch for models that won't fit */
   totalClusterMemoryBytes?: number;
+  onOptimize?: (modelId: string) => void;
 }
 
 /* ---- helpers ---- */
@@ -490,6 +491,7 @@ export function StoreRegistryTable({
   onPlacement,
   clusterCards = {},
   totalClusterMemoryBytes = 0,
+  onOptimize,
 }: StoreRegistryTableProps) {
   const registeredIds = useMemo(() => new Set(entries.map((e) => e.model_id)), [entries]);
   const pendingDownloads = useMemo(
@@ -651,6 +653,13 @@ export function StoreRegistryTable({
                     filled
                     delay={100}
                   />
+                  {!active && onOptimize && !entry.model_id.toLowerCase().includes('optiq') && (
+                    <InfoTooltip content="Optimize with OptiQ mixed-precision quantization" placement="left" delay={0}>
+                      <Button variant="outline" size="sm" icon onClick={() => onOptimize(entry.model_id)} title="Optimize model">
+                        <MdAutoFixHigh size={16} />
+                      </Button>
+                    </InfoTooltip>
+                  )}
                   <Button variant="danger" size="sm" icon onClick={() => onDelete(entry, active)} title="Delete model">
                     <FiTrash2 size={18} />
                   </Button>

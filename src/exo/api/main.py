@@ -232,6 +232,11 @@ class API:
         self._exo_config = exo_config
         self._store_client = store_client
         self._config_path = Path("exo.yaml")
+        self._model_optimizer: "ModelOptimizer | None" = None
+        # Initialize optimizer if store path is available
+        if exo_config and exo_config.model_store and exo_config.model_store.enabled:
+            from exo.store.model_optimizer import ModelOptimizer
+            self._model_optimizer = ModelOptimizer(store_path=Path(exo_config.model_store.store_path))
 
         self.paused: bool = False
         self.paused_ev: anyio.Event = anyio.Event()
@@ -382,6 +387,8 @@ class API:
             self.get_store_download_status
         )
         self.app.post("/store/purge-staging")(self.purge_staging_caches)
+        self.app.post("/store/models/{model_id:path}/optimize")(self.optimize_model)
+        self.app.get("/store/models/{model_id:path}/optimize/status")(self.get_optimize_status)
         self.app.get("/filesystem/browse")(self.browse_filesystem)
         self.app.get("/node/identity")(self.get_node_identity)
 
@@ -2133,3 +2140,42 @@ class API:
                 status_code=404, detail=f"Model {model_id} not in store"
             )
         return JSONResponse({"modelId": model_id, "deleted": True})
+
+    async def optimize_model(self, model_id: str, request: Request) -> JSONResponse:
+        """Start an OptiQ mixed-precision optimization for a model."""
+        if self._model_optimizer is None:
+            raise HTTPException(status_code=503, detail="Model optimizer not available (store not configured)")
+        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        target_bpw = float(body.get("target_bpw", 4.5))
+        candidate_bits = body.get("candidate_bits", [4, 8])
+        try:
+            await self._model_optimizer.optimize(
+                model_id=model_id,
+                target_bpw=target_bpw,
+                candidate_bits=candidate_bits,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return JSONResponse({
+            "modelId": model_id,
+            "status": "started",
+            "targetBpw": target_bpw,
+        })
+
+    async def get_optimize_status(self, model_id: str) -> JSONResponse:
+        """Get optimization status for a model."""
+        if self._model_optimizer is None:
+            raise HTTPException(status_code=503, detail="Model optimizer not available")
+        job = self._model_optimizer.get_status(model_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No optimization job found")
+        return JSONResponse({
+            "modelId": job.model_id,
+            "status": job.status,
+            "progress": job.progress,
+            "message": job.message,
+            "resultPath": job.result_path,
+            "achievedBpw": job.achieved_bpw,
+            "estimatedSizeMb": job.estimated_size_mb,
+            "error": job.error,
+        })
