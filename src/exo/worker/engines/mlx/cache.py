@@ -411,16 +411,21 @@ def make_kv_cache(
                 list[object],
                 model.make_cache(),  # type: ignore[reportUnknownMemberType]
             )
+            # Count KV layers separately so edge detection and seeding
+            # are based on KV position, not template index (which may
+            # include ArraysCache/RotatingKVCache entries).
+            num_kv = sum(1 for entry in template_cache if isinstance(entry, KVCache))
+            kv_pos = -1
             caches: list[object] = []
             for i, entry in enumerate(template_cache):
                 if isinstance(entry, KVCache):
-                    # Keep first/last N layers in FP16 for adaptive quality
-                    is_edge = i < OPTIQ_FP16_LAYERS or i >= len(template_cache) - OPTIQ_FP16_LAYERS
+                    kv_pos += 1
+                    is_edge = kv_pos < OPTIQ_FP16_LAYERS or kv_pos >= max(num_kv - OPTIQ_FP16_LAYERS, 0)
                     if is_edge:
                         caches.append(KVCache())
                     else:
-                        head_dim = getattr(model.layers[i].self_attn, "head_dim", 128)
-                        caches.append(OptiqKVCache(head_dim=head_dim, bits=OPTIQ_BITS, seed=42 + i))
+                        head_dim = getattr(model.layers[i].self_attn, "head_dim", 128) if i < len(model.layers) else 128
+                        caches.append(OptiqKVCache(head_dim=head_dim, bits=OPTIQ_BITS, seed=42 + kv_pos))
                 else:
                     caches.append(entry)
             return caches
@@ -448,6 +453,7 @@ def get_kv_cache_backend() -> KVCacheBackend:
         "mlx_quantized",
         "turboquant",
         "turboquant_adaptive",
+        "optiq",
     )
     if backend not in valid_backends:
         logger.warning(
