@@ -181,10 +181,16 @@ class DownloadCoordinator:
             if raw and isinstance(raw, dict):
                 inference = raw.get("inference")
                 if isinstance(inference, dict) and "kv_cache_backend" in inference:
-                    os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
-                    logger.info(
-                        f"DownloadCoordinator: updated EXO_KV_CACHE_BACKEND={inference['kv_cache_backend']}"
-                    )
+                    # Don't overwrite if user provided the env var at launch
+                    if not os.environ.get("_EXO_KV_BACKEND_USER_SET"):
+                        os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+                        logger.info(
+                            f"DownloadCoordinator: updated EXO_KV_CACHE_BACKEND={inference['kv_cache_backend']}"
+                        )
+                    else:
+                        logger.info(
+                            f"DownloadCoordinator: skipping KV backend update (user env var override active)"
+                        )
         except Exception as exc:
             logger.warning(f"DownloadCoordinator: failed to sync exo.yaml: {exc}")
 

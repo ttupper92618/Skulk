@@ -2002,15 +2002,21 @@ class API:
         from exo.shared.types.commands import SyncConfig
 
         await self._send_download(SyncConfig(config_yaml=config_yaml))
-        # Apply inference config to env var immediately so next model launch uses it
+        # Apply inference config to env var immediately so next model launch uses it.
+        # Don't overwrite if user provided the env var at launch.
         inference = config_data.get("inference")
         if isinstance(inference, dict) and "kv_cache_backend" in inference:
-            os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+            if not os.environ.get("_EXO_KV_BACKEND_USER_SET"):
+                os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+        # model_store changes still require restart; inference-only changes don't
+        has_store_changes = "model_store" in config_data
         return JSONResponse(
             {
                 "success": True,
-                "message": "Config saved and synced to cluster. KV cache backend takes effect on next model launch.",
-                "requiresRestart": False,
+                "message": "Config saved and synced to cluster."
+                + (" KV cache backend takes effect on next model launch." if inference else "")
+                + (" Restart required for model store changes." if has_store_changes else ""),
+                "requiresRestart": has_store_changes,
             }
         )
 
