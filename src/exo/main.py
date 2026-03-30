@@ -81,6 +81,19 @@ class Node:
         # when exo.yaml is missing, all store references stay None and exo
         # behaves identically to the upstream default).
         exo_config = load_exo_config(Path("exo.yaml"))
+
+        # Apply inference config (kv_cache_backend) to env var so runner
+        # subprocesses inherit it.  Env var takes precedence if already set.
+        if (
+            exo_config is not None
+            and exo_config.inference is not None
+            and not os.environ.get("EXO_KV_CACHE_BACKEND")
+        ):
+            os.environ["EXO_KV_CACHE_BACKEND"] = exo_config.inference.kv_cache_backend
+            logger.info(
+                f"Inference config: kv_cache_backend={exo_config.inference.kv_cache_backend}"
+            )
+
         store_client: ModelStoreClient | None = None
         store_server: ModelStoreServer | None = None
 

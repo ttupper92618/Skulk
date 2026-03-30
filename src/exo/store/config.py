@@ -191,6 +191,19 @@ class ExoConfig(FrozenModel):
     """
 
     model_store: ModelStoreConfig | None = None
+    inference: "InferenceConfig | None" = None
+
+
+@final
+class InferenceConfig(FrozenModel):
+    """Inference-related configuration.
+
+    Attributes:
+        kv_cache_backend: KV cache backend to use. One of: default,
+            mlx_quantized, turboquant, turboquant_adaptive, optiq.
+    """
+
+    kv_cache_backend: str = "default"
 
 
 def load_exo_config(

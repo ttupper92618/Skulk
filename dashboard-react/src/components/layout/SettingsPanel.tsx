@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
-import { useConfig, type StoreConfig } from '../../hooks/useConfig';
+import { useConfig, type StoreConfig, type FullConfig } from '../../hooks/useConfig';
 import { Button } from '../common/Button';
 import { Field } from '../common/Field';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -148,6 +148,34 @@ const StyledField = styled(Field)`
   min-width: 0;
 `;
 
+const Select = styled.select`
+  background: ${({ theme }) => theme.colors.bg};
+  color: ${({ theme }) => theme.colors.text};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 4px 8px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  font-family: ${({ theme }) => theme.fonts.body};
+  outline: none;
+  cursor: pointer;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.goldDim};
+  }
+
+  option {
+    background: ${({ theme }) => theme.colors.surface};
+    color: ${({ theme }) => theme.colors.text};
+  }
+`;
+
+const HintText = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  font-family: ${({ theme }) => theme.fonts.body};
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-style: italic;
+`;
+
 const ConfigPath = styled.div`
   font-size: ${({ theme }) => theme.fontSizes.xs};
   font-family: ${({ theme }) => theme.fonts.body};
@@ -177,8 +205,9 @@ const Spacer = styled.span`
 /* ---- component ---- */
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
-  const { config, configPath, loading, saving, error, fetchConfig, saveConfig } = useConfig();
+  const { fullConfig, configPath, loading, saving, error, fetchConfig, saveFullConfig } = useConfig();
   const [draft, setDraft] = useState<StoreConfig | null>(null);
+  const [kvBackend, setKvBackend] = useState('default');
 
   // Fetch config when panel opens
   useEffect(() => {
@@ -187,8 +216,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   // Seed draft from fetched config
   useEffect(() => {
-    if (config) setDraft({ ...config });
-  }, [config]);
+    if (fullConfig?.model_store) setDraft({ ...fullConfig.model_store });
+    setKvBackend(fullConfig?.inference?.kv_cache_backend ?? 'default');
+  }, [fullConfig]);
 
   const update = useCallback((patch: Partial<StoreConfig>) => {
     setDraft((prev) => prev ? { ...prev, ...patch } : prev);
@@ -203,15 +233,17 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!draft) return;
-    const ok = await saveConfig(draft);
+    const updated: FullConfig = {};
+    if (draft) updated.model_store = draft;
+    updated.inference = { kv_cache_backend: kvBackend };
+    const ok = await saveFullConfig(updated);
     if (ok) {
-      addToast({ type: 'success', message: 'Settings saved' });
+      addToast({ type: 'success', message: 'Settings saved — KV cache change takes effect on next model launch' });
       onClose();
     } else {
       addToast({ type: 'error', message: 'Failed to save settings' });
     }
-  }, [draft, saveConfig, onClose]);
+  }, [draft, kvBackend, saveFullConfig, onClose]);
 
   // ESC to close
   useEffect(() => {
@@ -363,6 +395,28 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               {configPath && <ConfigPath>Config: {configPath}</ConfigPath>}
             </>
           )}
+
+          {/* Inference — always shown, not gated on model_store config */}
+          <Fieldset>
+            <Legend>Inference</Legend>
+            <Row>
+              <FieldLabel>
+                KV Cache Backend
+                <InfoTooltip
+                  filled
+                  content="Select the KV cache quantization strategy. OptiQ uses rotation-based quantization for best quality. TurboQuant Adaptive is a proven stable alternative. Default uses no cache quantization. Takes effect on next model launch."
+                />
+              </FieldLabel>
+              <Select value={kvBackend} onChange={(e) => setKvBackend(e.target.value)}>
+                <option value="default">Default (no quantization)</option>
+                <option value="optiq">OptiQ (rotation-based)</option>
+                <option value="turboquant_adaptive">TurboQuant Adaptive</option>
+                <option value="turboquant">TurboQuant</option>
+                <option value="mlx_quantized">MLX Quantized</option>
+              </Select>
+            </Row>
+            <HintText>Changes take effect on the next model launch. Models with incompatible architectures (GQA, non-power-of-two head_dim) will automatically fall back to default.</HintText>
+          </Fieldset>
         </Body>
 
         <Footer>
