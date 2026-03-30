@@ -137,9 +137,9 @@ def build_model_path(model_id: ModelId) -> Path:
     """Resolve a local filesystem path for *model_id*.
 
     Checks ``EXO_MODELS_PATH`` (staging, store, etc.) first, then falls
-    back to the standard ``EXO_MODELS_DIR``.  Raises ``FileNotFoundError``
-    if no valid model directory is found — this prevents the runner from
-    attempting to load from a path that doesn't exist.
+    back to the standard ``EXO_MODELS_DIR`` and the default staging
+    directory.  Raises ``FileNotFoundError`` if no valid model directory
+    is found.
     """
     found = resolve_model_in_path(model_id)
     if found is not None:
@@ -147,9 +147,15 @@ def build_model_path(model_id: ModelId) -> Path:
     default = EXO_MODELS_DIR / model_id.normalize()
     if default.is_dir() and (default / "config.json").exists():
         return default
+    # Fallback: check the default staging directory directly.
+    # This covers cases where the staging path wasn't registered in
+    # EXO_MODELS_PATH (e.g., config not yet synced) but files exist.
+    staging_fallback = Path.home() / ".exo" / "staging" / model_id.normalize()
+    if staging_fallback.is_dir() and (staging_fallback / "config.json").exists():
+        return staging_fallback
     raise FileNotFoundError(
         f"Model {model_id} not found on disk. "
-        f"Checked EXO_MODELS_PATH and {default}. "
+        f"Checked EXO_MODELS_PATH, {default}, and {staging_fallback}. "
         f"Ensure the model is downloaded before loading."
     )
 
