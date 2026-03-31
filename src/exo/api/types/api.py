@@ -278,8 +278,37 @@ class CreateInstanceParams(BaseModel):
         json_schema_extra={
             "example": {
                 "instance": {
-                    "shard_assignments": {
-                        "model_id": "mlx-community/Llama-3.2-1B-Instruct-4bit"
+                    "MlxRingInstance": {
+                        "instanceId": "00000000-0000-0000-0000-000000000000",
+                        "shardAssignments": {
+                            "modelId": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+                            "runnerToShard": {
+                                "runner-1": {
+                                    "PipelineShardMetadata": {
+                                        "modelCard": {
+                                            "modelId": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+                                            "storageSize": {"inBytes": 2147483648},
+                                            "nLayers": 32,
+                                            "hiddenSize": 2048,
+                                            "supportsTensor": False,
+                                            "tasks": ["TextGeneration"],
+                                        },
+                                        "deviceRank": 0,
+                                        "worldSize": 1,
+                                        "startLayer": 0,
+                                        "endLayer": 32,
+                                        "nLayers": 32,
+                                    }
+                                }
+                            },
+                            "nodeToRunner": {
+                                "node-1": "runner-1"
+                            }
+                        },
+                        "hostsByNode": {
+                            "node-1": []
+                        },
+                        "ephemeralPort": 52416,
                     }
                 }
             }
@@ -470,8 +499,21 @@ class StartDownloadParams(CamelCaseModel):
             "example": {
                 "targetNodeId": "12D3KooWExampleNodeId",
                 "shardMetadata": {
-                    "type": "tensor",
-                    "model_id": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+                    "TensorShardMetadata": {
+                        "modelCard": {
+                            "modelId": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+                            "storageSize": {"inBytes": 2147483648},
+                            "nLayers": 32,
+                            "hiddenSize": 2048,
+                            "supportsTensor": True,
+                            "tasks": ["TextGeneration"],
+                        },
+                        "deviceRank": 0,
+                        "worldSize": 1,
+                        "startLayer": 0,
+                        "endLayer": 32,
+                        "nLayers": 32,
+                    }
                 },
             }
         }

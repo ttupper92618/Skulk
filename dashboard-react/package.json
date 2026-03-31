@@ -50,6 +50,7 @@
     "eslint-plugin-storybook": "^10.3.3",
     "globals": "^17.4.0",
     "playwright": "^1.58.2",
+    "redoc": "2.5.2",
     "storybook": "^10.3.3",
     "typedoc": "^0.28.14",
     "typescript": "~5.9.3",

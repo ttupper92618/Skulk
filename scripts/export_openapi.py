@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
-from urllib.request import urlopen
 
 os.environ.setdefault("EXO_HOME", ".skulk-docs-home")
 
@@ -11,10 +11,15 @@ from exo.api.main import API
 from exo.shared.types.common import NodeId
 from exo.utils.channels import channel
 
-REDOC_BUNDLE_URL = (
-    "https://cdn.jsdelivr.net/npm/redoc@2.4.0/bundles/redoc.standalone.js"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REDOC_BUNDLE_SOURCE = (
+    REPO_ROOT
+    / "dashboard-react"
+    / "node_modules"
+    / "redoc"
+    / "bundles"
+    / "redoc.standalone.js"
 )
-REDOC_DOWNLOAD_TIMEOUT_SECONDS = 30
 
 
 def build_docs_api() -> API:
@@ -45,8 +50,12 @@ def write_openapi(output_path: Path) -> None:
 def write_redoc_html(output_path: Path, openapi_json_path: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     redoc_bundle_path = output_path.parent / "redoc.standalone.js"
-    with urlopen(REDOC_BUNDLE_URL, timeout=REDOC_DOWNLOAD_TIMEOUT_SECONDS) as response:
-        redoc_bundle_path.write_bytes(response.read())
+    if not REDOC_BUNDLE_SOURCE.exists():
+        raise FileNotFoundError(
+            "ReDoc bundle not found. Install dashboard dependencies first so "
+            f"{REDOC_BUNDLE_SOURCE} exists."
+        )
+    shutil.copy2(REDOC_BUNDLE_SOURCE, redoc_bundle_path)
     output_path.write_text(
         f"""<!doctype html>
 <html lang="en">
