@@ -720,7 +720,6 @@ Use this to cancel an active text or image command when you still know the comma
 
 ## Related Docs
 
-- [README.md](../README.md)
 - [docs/model-store.md](model-store.md)
 - [docs/kv-cache-backends.md](kv-cache-backends.md)
 - [docs/architecture.md](architecture.md)

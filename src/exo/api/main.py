@@ -191,6 +191,41 @@ if TYPE_CHECKING:
 _API_EVENT_LOG_DIR = EXO_EVENT_LOG_DIR / "api"
 ONBOARDING_COMPLETE_FILE = EXO_CACHE_HOME / "onboarding_complete"
 
+API_TAGS_METADATA = [
+    {
+        "name": "Compatibility APIs",
+        "description": "OpenAI, Anthropic Claude, and Ollama-compatible endpoints.",
+    },
+    {
+        "name": "Models",
+        "description": "Model discovery, search, and custom model-card management.",
+    },
+    {
+        "name": "Instances",
+        "description": "Placement, launch, lookup, and deletion of model instances.",
+    },
+    {
+        "name": "Downloads",
+        "description": "Low-level node download and staging-cache management.",
+    },
+    {
+        "name": "Store",
+        "description": "Central model-store health, registry, downloads, and optimization.",
+    },
+    {
+        "name": "Config",
+        "description": "Cluster configuration and filesystem helpers used by the dashboard.",
+    },
+    {
+        "name": "State & Tracing",
+        "description": "Cluster state, event log, trace exports, and onboarding helpers.",
+    },
+    {
+        "name": "Images",
+        "description": "Image generation, editing, retrieval, and benchmarking endpoints.",
+    },
+]
+
 
 def _format_to_content_type(image_format: Literal["png", "jpeg", "webp"] | None) -> str:
     return f"image/{image_format or 'png'}"
@@ -203,6 +238,24 @@ def _ensure_seed(params: AdvancedImageParams | None) -> AdvancedImageParams:
     if params.seed is None:
         return params.model_copy(update={"seed": random.randint(0, 2**32 - 1)})
     return params
+
+
+def _create_fastapi_app() -> FastAPI:
+    return FastAPI(
+        title="Skulk API",
+        summary="Distributed inference, placement, store, and compatibility APIs for Skulk.",
+        description=(
+            "Skulk exposes OpenAI-compatible inference APIs, cluster placement controls, "
+            "model-store workflows, configuration endpoints, and debugging endpoints. "
+            "Most text-generation requests require the target model to already be placed "
+            "and running on the node or cluster."
+        ),
+        version="0.1.0",
+        openapi_url="/api/openapi.json",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_tags=API_TAGS_METADATA,
+    )
 
 
 class API:
@@ -218,9 +271,11 @@ class API:
         election_receiver: Receiver[ElectionMessage],
         exo_config: "ExoConfig | None" = None,
         store_client: "ModelStoreClient | None" = None,
+        enable_event_log: bool = True,
+        mount_dashboard: bool = True,
     ) -> None:
         self.state = State()
-        self._event_log = DiskEventLog(_API_EVENT_LOG_DIR)
+        self._event_log = DiskEventLog(_API_EVENT_LOG_DIR) if enable_event_log else None
         self._system_id = SystemId()
         self.command_sender = command_sender
         self.download_command_sender = download_command_sender
@@ -241,7 +296,7 @@ class API:
         self.paused: bool = False
         self.paused_ev: anyio.Event = anyio.Event()
 
-        self.app = FastAPI()
+        self.app = _create_fastapi_app()
 
         @self.app.middleware("http")
         async def _log_requests(  # pyright: ignore[reportUnusedFunction]
@@ -255,14 +310,15 @@ class API:
         self._setup_cors()
         self._setup_routes()
 
-        self.app.mount(
-            "/",
-            StaticFiles(
-                directory=DASHBOARD_DIR,
-                html=True,
-            ),
-            name="dashboard",
-        )
+        if mount_dashboard:
+            self.app.mount(
+                "/",
+                StaticFiles(
+                    directory=DASHBOARD_DIR,
+                    html=True,
+                ),
+                name="dashboard",
+            )
 
         self._text_generation_queues: dict[
             CommandId,
@@ -276,8 +332,9 @@ class API:
 
     def reset(self, result_clock: int, event_receiver: Receiver[IndexedEvent]):
         logger.info("Resetting API State")
-        self._event_log.close()
-        self._event_log = DiskEventLog(_API_EVENT_LOG_DIR)
+        if self._event_log is not None:
+            self._event_log.close()
+            self._event_log = DiskEventLog(_API_EVENT_LOG_DIR)
         self.state = State()
         self._system_id = SystemId()
         self._text_generation_queues = {}
@@ -319,78 +376,159 @@ class API:
         )
 
     def _setup_routes(self) -> None:
-        self.app.get("/node_id")(lambda: self.node_id)
-        self.app.post("/instance")(self.create_instance)
-        self.app.post("/place_instance")(self.place_instance)
-        self.app.get("/instance/placement")(self.get_placement)
-        self.app.get("/instance/previews")(self.get_placement_previews)
-        self.app.get("/instance/{instance_id}")(self.get_instance)
-        self.app.delete("/instance/{instance_id}")(self.delete_instance)
-        self.app.get("/models")(self.get_models)
-        self.app.get("/v1/models")(self.get_models)
-        self.app.post("/models/add")(self.add_custom_model)
-        self.app.delete("/models/custom/{model_id:path}")(self.delete_custom_model)
-        self.app.get("/models/search")(self.search_models)
-        self.app.post("/v1/chat/completions", response_model=None)(
+        self.app.get(
+            "/node_id",
+            tags=["State & Tracing"],
+            summary="Get this API node's ID",
+        )(lambda: self.node_id)
+        self.app.post(
+            "/instance",
+            tags=["Instances"],
+            summary="Create an instance from a fully specified placement",
+        )(self.create_instance)
+        self.app.post(
+            "/place_instance",
+            tags=["Instances"],
+            summary="Quick-launch a model placement",
+        )(self.place_instance)
+        self.app.get(
+            "/instance/placement",
+            tags=["Instances"],
+            summary="Compute a concrete placement for one requested combination",
+        )(self.get_placement)
+        self.app.get(
+            "/instance/previews",
+            tags=["Instances"],
+            summary="Preview valid placements for a model",
+        )(self.get_placement_previews)
+        self.app.get(
+            "/instance/{instance_id}",
+            tags=["Instances"],
+            summary="Get one running instance",
+        )(self.get_instance)
+        self.app.delete(
+            "/instance/{instance_id}",
+            tags=["Instances"],
+            summary="Delete a running instance",
+        )(self.delete_instance)
+        self.app.get("/models", tags=["Models"], summary="List known models")(self.get_models)
+        self.app.get("/v1/models", tags=["Models"], summary="List known models")(self.get_models)
+        self.app.post(
+            "/models/add",
+            tags=["Models"],
+            summary="Fetch and add a custom model card",
+        )(self.add_custom_model)
+        self.app.delete(
+            "/models/custom/{model_id:path}",
+            tags=["Models"],
+            summary="Delete a custom model card",
+        )(self.delete_custom_model)
+        self.app.get(
+            "/models/search",
+            tags=["Models"],
+            summary="Search Hugging Face for models",
+        )(self.search_models)
+        self.app.post(
+            "/v1/chat/completions",
+            response_model=None,
+            tags=["Compatibility APIs"],
+            summary="OpenAI Chat Completions-compatible text generation",
+        )(
             self.chat_completions
         )
-        self.app.post("/bench/chat/completions")(self.bench_chat_completions)
-        self.app.post("/v1/images/generations", response_model=None)(
+        self.app.post(
+            "/bench/chat/completions",
+            tags=["Compatibility APIs"],
+            summary="Benchmark chat completions",
+        )(self.bench_chat_completions)
+        self.app.post(
+            "/v1/images/generations",
+            response_model=None,
+            tags=["Images"],
+            summary="Generate images",
+        )(
             self.image_generations
         )
-        self.app.post("/bench/images/generations")(self.bench_image_generations)
-        self.app.post("/v1/images/edits", response_model=None)(self.image_edits)
-        self.app.post("/bench/images/edits")(self.bench_image_edits)
-        self.app.get("/images")(self.list_images)
-        self.app.get("/images/{image_id}")(self.get_image)
-        self.app.post("/v1/messages", response_model=None)(self.claude_messages)
-        self.app.post("/v1/responses", response_model=None)(self.openai_responses)
-        self.app.post("/v1/cancel/{command_id}")(self.cancel_command)
+        self.app.post(
+            "/bench/images/generations",
+            tags=["Images"],
+            summary="Benchmark image generation",
+        )(self.bench_image_generations)
+        self.app.post(
+            "/v1/images/edits",
+            response_model=None,
+            tags=["Images"],
+            summary="Edit images",
+        )(self.image_edits)
+        self.app.post(
+            "/bench/images/edits",
+            tags=["Images"],
+            summary="Benchmark image editing",
+        )(self.bench_image_edits)
+        self.app.get("/images", tags=["Images"], summary="List stored images")(self.list_images)
+        self.app.get("/images/{image_id}", tags=["Images"], summary="Fetch one stored image")(self.get_image)
+        self.app.post(
+            "/v1/messages",
+            response_model=None,
+            tags=["Compatibility APIs"],
+            summary="Anthropic Claude Messages-compatible endpoint",
+        )(self.claude_messages)
+        self.app.post(
+            "/v1/responses",
+            response_model=None,
+            tags=["Compatibility APIs"],
+            summary="OpenAI Responses-compatible endpoint",
+        )(self.openai_responses)
+        self.app.post(
+            "/v1/cancel/{command_id}",
+            tags=["Compatibility APIs"],
+            summary="Cancel an active text or image command",
+        )(self.cancel_command)
 
         # Ollama API
-        self.app.head("/ollama/")(self.ollama_version)
-        self.app.head("/ollama/api/version")(self.ollama_version)
-        self.app.post("/ollama/api/chat", response_model=None)(self.ollama_chat)
-        self.app.post("/ollama/api/api/chat", response_model=None)(self.ollama_chat)
-        self.app.post("/ollama/api/v1/chat", response_model=None)(self.ollama_chat)
-        self.app.post("/ollama/api/generate", response_model=None)(self.ollama_generate)
-        self.app.get("/ollama/api/tags")(self.ollama_tags)
-        self.app.get("/ollama/api/api/tags")(self.ollama_tags)
-        self.app.get("/ollama/api/v1/tags")(self.ollama_tags)
-        self.app.post("/ollama/api/show")(self.ollama_show)
-        self.app.get("/ollama/api/ps")(self.ollama_ps)
-        self.app.get("/ollama/api/version")(self.ollama_version)
+        self.app.head("/ollama/", tags=["Compatibility APIs"], summary="Ollama version check")(self.ollama_version)
+        self.app.head("/ollama/api/version", tags=["Compatibility APIs"], summary="Ollama version check")(self.ollama_version)
+        self.app.post("/ollama/api/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat")(self.ollama_chat)
+        self.app.post("/ollama/api/api/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat alias")(self.ollama_chat)
+        self.app.post("/ollama/api/v1/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat alias")(self.ollama_chat)
+        self.app.post("/ollama/api/generate", response_model=None, tags=["Compatibility APIs"], summary="Ollama generate")(self.ollama_generate)
+        self.app.get("/ollama/api/tags", tags=["Compatibility APIs"], summary="List Ollama models")(self.ollama_tags)
+        self.app.get("/ollama/api/api/tags", tags=["Compatibility APIs"], summary="List Ollama models alias")(self.ollama_tags)
+        self.app.get("/ollama/api/v1/tags", tags=["Compatibility APIs"], summary="List Ollama models alias")(self.ollama_tags)
+        self.app.post("/ollama/api/show", tags=["Compatibility APIs"], summary="Show Ollama model details")(self.ollama_show)
+        self.app.get("/ollama/api/ps", tags=["Compatibility APIs"], summary="List running Ollama models")(self.ollama_ps)
+        self.app.get("/ollama/api/version", tags=["Compatibility APIs"], summary="Get Ollama API version")(self.ollama_version)
 
-        self.app.get("/state")(lambda: self.state)
-        self.app.get("/events")(self.stream_events)
-        self.app.post("/download/start")(self.start_download)
-        self.app.delete("/download/{node_id}/{model_id:path}")(self.delete_download)
-        self.app.get("/v1/traces")(self.list_traces)
-        self.app.post("/v1/traces/delete")(self.delete_traces)
-        self.app.get("/v1/traces/{task_id}")(self.get_trace)
-        self.app.get("/v1/traces/{task_id}/stats")(self.get_trace_stats)
-        self.app.get("/v1/traces/{task_id}/raw")(self.get_trace_raw)
-        self.app.get("/onboarding")(self.get_onboarding)
-        self.app.post("/onboarding")(self.complete_onboarding)
+        self.app.get("/state", tags=["State & Tracing"], summary="Get cluster state")(lambda: self.state)
+        self.app.get("/events", tags=["State & Tracing"], summary="Get stored event log")(self.stream_events)
+        self.app.post("/download/start", tags=["Downloads"], summary="Start a node download")(self.start_download)
+        self.app.delete("/download/{node_id}/{model_id:path}", tags=["Downloads"], summary="Delete a node download")(self.delete_download)
+        self.app.get("/v1/traces", tags=["State & Tracing"], summary="List saved traces")(self.list_traces)
+        self.app.post("/v1/traces/delete", tags=["State & Tracing"], summary="Delete saved traces")(self.delete_traces)
+        self.app.get("/v1/traces/{task_id}", tags=["State & Tracing"], summary="Get one saved trace")(self.get_trace)
+        self.app.get("/v1/traces/{task_id}/stats", tags=["State & Tracing"], summary="Get one trace summary")(self.get_trace_stats)
+        self.app.get("/v1/traces/{task_id}/raw", tags=["State & Tracing"], summary="Download raw trace JSON")(self.get_trace_raw)
+        self.app.get("/onboarding", tags=["State & Tracing"], summary="Get onboarding completion status")(self.get_onboarding)
+        self.app.post("/onboarding", tags=["State & Tracing"], summary="Mark onboarding complete")(self.complete_onboarding)
 
         # Config & store endpoints
-        self.app.get("/config")(self.get_config)
-        self.app.put("/config")(self.update_config)
-        self.app.get("/store/health")(self.get_store_health)
-        self.app.get("/store/registry")(self.get_store_registry)
-        self.app.get("/store/downloads")(self.get_store_downloads)
-        self.app.delete("/store/models/{model_id:path}")(self.delete_store_model)
-        self.app.post("/store/models/{model_id:path}/download")(
+        self.app.get("/config", tags=["Config"], summary="Get cluster config")(self.get_config)
+        self.app.put("/config", tags=["Config"], summary="Update cluster config")(self.update_config)
+        self.app.get("/store/health", tags=["Store"], summary="Get model-store health")(self.get_store_health)
+        self.app.get("/store/registry", tags=["Store"], summary="Get model-store registry")(self.get_store_registry)
+        self.app.get("/store/downloads", tags=["Store"], summary="List active store downloads")(self.get_store_downloads)
+        self.app.delete("/store/models/{model_id:path}", tags=["Store"], summary="Delete a model from the store")(self.delete_store_model)
+        self.app.post("/store/models/{model_id:path}/download", tags=["Store"], summary="Request a store download")(
             self.request_store_download
         )
-        self.app.get("/store/models/{model_id:path}/download/status")(
+        self.app.get("/store/models/{model_id:path}/download/status", tags=["Store"], summary="Get store download status")(
             self.get_store_download_status
         )
-        self.app.post("/store/purge-staging")(self.purge_staging_caches)
-        self.app.post("/store/models/{model_id:path}/optimize")(self.optimize_model)
-        self.app.get("/store/models/{model_id:path}/optimize/status")(self.get_optimize_status)
-        self.app.get("/filesystem/browse")(self.browse_filesystem)
-        self.app.get("/node/identity")(self.get_node_identity)
+        self.app.post("/store/purge-staging", tags=["Downloads"], summary="Purge staging caches")(self.purge_staging_caches)
+        self.app.post("/store/models/{model_id:path}/optimize", tags=["Store"], summary="Start model optimization")(self.optimize_model)
+        self.app.get("/store/models/{model_id:path}/optimize/status", tags=["Store"], summary="Get model optimization status")(self.get_optimize_status)
+        self.app.get("/filesystem/browse", tags=["Config"], summary="Browse filesystem roots for config selection")(self.browse_filesystem)
+        self.app.get("/node/identity", tags=["Config"], summary="Get node identity and preferred IP")(self.get_node_identity)
 
     async def place_instance(self, payload: PlaceInstanceParams):
         command = PlaceInstance(
@@ -833,7 +971,9 @@ class API:
             yield "]"
 
         return StreamingResponse(
-            _generate_json_array(self._event_log.read_all()),
+            _generate_json_array(
+                [] if self._event_log is None else self._event_log.read_all()
+            ),
             media_type="application/json",
         )
 
@@ -1729,7 +1869,8 @@ class API:
                     with anyio.CancelScope(shield=True):
                         shutdown_ev.set()
         finally:
-            self._event_log.close()
+            if self._event_log is not None:
+                self._event_log.close()
             self.command_sender.close()
             self.event_receiver.close()
 
@@ -1750,7 +1891,8 @@ class API:
     async def _apply_state(self):
         with self.event_receiver as events:
             async for i_event in events:
-                self._event_log.append(i_event.event)
+                if self._event_log is not None:
+                    self._event_log.append(i_event.event)
                 self.state = apply(self.state, i_event)
                 event = i_event.event
 
