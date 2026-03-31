@@ -390,6 +390,10 @@ class API:
             "/place_instance",
             tags=["Instances"],
             summary="Quick-launch a model placement",
+            description=(
+                "Place and launch a model with Skulk choosing a valid concrete placement "
+                "from the requested sharding, instance metadata, and minimum-node constraints."
+            ),
         )(self.place_instance)
         self.app.get(
             "/instance/placement",
@@ -400,6 +404,10 @@ class API:
             "/instance/previews",
             tags=["Instances"],
             summary="Preview valid placements for a model",
+            description=(
+                "Return candidate placements for a model before launch. This is the best first "
+                "step when you want to see what Skulk can place on the current node or cluster."
+            ),
         )(self.get_placement_previews)
         self.app.get(
             "/instance/{instance_id}",
@@ -427,12 +435,20 @@ class API:
             "/models/search",
             tags=["Models"],
             summary="Search Hugging Face for models",
+            description=(
+                "Search for models to add or launch. Skulk prefers MLX-friendly results first, "
+                "then falls back to broader Hugging Face search results."
+            ),
         )(self.search_models)
         self.app.post(
             "/v1/chat/completions",
             response_model=None,
             tags=["Compatibility APIs"],
             summary="OpenAI Chat Completions-compatible text generation",
+            description=(
+                "Generate text with an OpenAI Chat Completions-compatible payload. The requested "
+                "model must already be placed and running or Skulk will return a not-found error."
+            ),
         )(
             self.chat_completions
         )
@@ -472,12 +488,20 @@ class API:
             response_model=None,
             tags=["Compatibility APIs"],
             summary="Anthropic Claude Messages-compatible endpoint",
+            description=(
+                "Claude Messages-compatible text generation endpoint. As with chat completions, "
+                "the target model must already be placed and ready."
+            ),
         )(self.claude_messages)
         self.app.post(
             "/v1/responses",
             response_model=None,
             tags=["Compatibility APIs"],
             summary="OpenAI Responses-compatible endpoint",
+            description=(
+                "OpenAI Responses-compatible endpoint for text generation and reasoning-style "
+                "workflows backed by a placed Skulk model."
+            ),
         )(self.openai_responses)
         self.app.post(
             "/v1/cancel/{command_id}",
@@ -488,7 +512,13 @@ class API:
         # Ollama API
         self.app.head("/ollama/", tags=["Compatibility APIs"], summary="Ollama version check")(self.ollama_version)
         self.app.head("/ollama/api/version", tags=["Compatibility APIs"], summary="Ollama version check")(self.ollama_version)
-        self.app.post("/ollama/api/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat")(self.ollama_chat)
+        self.app.post(
+            "/ollama/api/chat",
+            response_model=None,
+            tags=["Compatibility APIs"],
+            summary="Ollama chat",
+            description="Ollama-compatible chat endpoint backed by Skulk model placement and routing.",
+        )(self.ollama_chat)
         self.app.post("/ollama/api/api/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat alias")(self.ollama_chat)
         self.app.post("/ollama/api/v1/chat", response_model=None, tags=["Compatibility APIs"], summary="Ollama chat alias")(self.ollama_chat)
         self.app.post("/ollama/api/generate", response_model=None, tags=["Compatibility APIs"], summary="Ollama generate")(self.ollama_generate)
@@ -512,11 +542,39 @@ class API:
         self.app.post("/onboarding", tags=["State & Tracing"], summary="Mark onboarding complete")(self.complete_onboarding)
 
         # Config & store endpoints
-        self.app.get("/config", tags=["Config"], summary="Get cluster config")(self.get_config)
-        self.app.put("/config", tags=["Config"], summary="Update cluster config")(self.update_config)
-        self.app.get("/store/health", tags=["Store"], summary="Get model-store health")(self.get_store_health)
-        self.app.get("/store/registry", tags=["Store"], summary="Get model-store registry")(self.get_store_registry)
-        self.app.get("/store/downloads", tags=["Store"], summary="List active store downloads")(self.get_store_downloads)
+        self.app.get(
+            "/config",
+            tags=["Config"],
+            summary="Get cluster config",
+            description="Return the current cluster-wide config with sensitive fields such as the HF token removed.",
+        )(self.get_config)
+        self.app.put(
+            "/config",
+            tags=["Config"],
+            summary="Update cluster config",
+            description=(
+                "Update cluster-wide config. Some changes apply to future launches immediately, "
+                "while model-store location changes still require a restart."
+            ),
+        )(self.update_config)
+        self.app.get(
+            "/store/health",
+            tags=["Store"],
+            summary="Get model-store health",
+            description="Check whether the configured shared model store is enabled and reachable.",
+        )(self.get_store_health)
+        self.app.get(
+            "/store/registry",
+            tags=["Store"],
+            summary="Get model-store registry",
+            description="List models and metadata known to the shared store registry.",
+        )(self.get_store_registry)
+        self.app.get(
+            "/store/downloads",
+            tags=["Store"],
+            summary="List active store downloads",
+            description="List in-progress downloads being managed by the shared model store.",
+        )(self.get_store_downloads)
         self.app.delete("/store/models/{model_id:path}", tags=["Store"], summary="Delete a model from the store")(self.delete_store_model)
         self.app.post("/store/models/{model_id:path}/download", tags=["Store"], summary="Request a store download")(
             self.request_store_download
@@ -525,7 +583,15 @@ class API:
             self.get_store_download_status
         )
         self.app.post("/store/purge-staging", tags=["Downloads"], summary="Purge staging caches")(self.purge_staging_caches)
-        self.app.post("/store/models/{model_id:path}/optimize", tags=["Store"], summary="Start model optimization")(self.optimize_model)
+        self.app.post(
+            "/store/models/{model_id:path}/optimize",
+            tags=["Store"],
+            summary="Start model optimization",
+            description=(
+                "Start an optimization job for a model already present in the shared store. "
+                "Use this for workflows such as OptiQ conversion or alternate artifact generation."
+            ),
+        )(self.optimize_model)
         self.app.get("/store/models/{model_id:path}/optimize/status", tags=["Store"], summary="Get model optimization status")(self.get_optimize_status)
         self.app.get("/filesystem/browse", tags=["Config"], summary="Browse filesystem roots for config selection")(self.browse_filesystem)
         self.app.get("/node/identity", tags=["Config"], summary="Get node identity and preferred IP")(self.get_node_identity)

@@ -9,3 +9,5 @@ Use this artifact if you want to:
 - inspect the machine-readable API schema
 - build client-generation workflows later
 - compare API changes over time in CI
+
+If you want a browsable version first, start with the [API Reference (ReDoc)](api-reference.md).
