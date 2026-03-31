@@ -1,13 +1,9 @@
 # API Reference
 
-The generated backend API reference is rendered with ReDoc.
+<script>
+window.location.replace("../../generated/api/index.html");
+</script>
 
-<p><a href="../generated/api/index.html">Open full API reference</a></p>
+Redirecting to the generated API reference.
 
-If the embedded renderer below does not display correctly in your browser, use the full-page link above.
-
-<iframe
-  src="../generated/api/index.html"
-  title="Skulk API Reference"
-  style="width: 100%; min-height: 80vh; border: 1px solid #ddd; border-radius: 8px;"
-></iframe>
+If you are not redirected automatically, <a href="../../generated/api/index.html">open the API reference</a>.

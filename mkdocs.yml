@@ -2,11 +2,7 @@ site_name: Skulk Developer Docs
 site_description: Generated and hand-written developer documentation for Skulk
 repo_url: https://github.com/Foxlight-Foundation/Skulk
 theme:
-  name: material
-  features:
-    - navigation.sections
-    - navigation.expand
-    - content.code.copy
+  name: shadcn
 
 docs_dir: docs
 site_dir: site
