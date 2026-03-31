@@ -393,6 +393,34 @@ class ImageGenerationResponse(BaseModel):
     data: list[ImageData]
 
 
+# ── Embeddings ──────────────────────────────────────────
+
+class EmbeddingRequest(BaseModel):
+    model: str
+    input: str | list[str]
+    encoding_format: Literal["float", "base64"] = "float"
+    dimensions: int | None = None
+    user: str | None = None
+
+
+class EmbeddingObject(BaseModel):
+    object: str = "embedding"
+    index: int
+    embedding: list[float] | str
+
+
+class EmbeddingUsage(BaseModel):
+    prompt_tokens: int
+    total_tokens: int
+
+
+class EmbeddingResponse(BaseModel):
+    object: str = "list"
+    data: list[EmbeddingObject]
+    model: str
+    usage: EmbeddingUsage
+
+
 class BenchImageGenerationResponse(ImageGenerationResponse):
     generation_stats: ImageGenerationStats | None = None
     power_usage: PowerUsage | None = None

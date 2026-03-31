@@ -63,6 +63,7 @@ from exo.api.types import (
     CreateInstanceParams,
     CreateInstanceResponse,
     DeleteDownloadResponse,
+    EmbeddingRequest,
     DeleteInstanceResponse,
     DeleteTracesRequest,
     DeleteTracesResponse,
@@ -233,6 +234,7 @@ class API:
         self._store_client = store_client
         self._config_path = Path("exo.yaml")
         self._model_optimizer: "ModelOptimizer | None" = None
+        self._embedding_engine: "EmbeddingEngine | None" = None
         # Initialize optimizer if store path is available
         if exo_config and exo_config.model_store and exo_config.model_store.enabled:
             from exo.store.model_optimizer import ModelOptimizer
@@ -334,6 +336,7 @@ class API:
         self.app.post("/v1/chat/completions", response_model=None)(
             self.chat_completions
         )
+        self.app.post("/v1/embeddings")(self.embeddings)
         self.app.post("/bench/chat/completions")(self.bench_chat_completions)
         self.app.post("/v1/images/generations", response_model=None)(
             self.image_generations
@@ -2198,4 +2201,38 @@ class API:
             "achievedBpw": job.achieved_bpw,
             "estimatedSizeMb": job.estimated_size_mb,
             "error": job.error,
+        })
+
+    async def embeddings(self, request: EmbeddingRequest) -> JSONResponse:
+        """OpenAI-compatible embeddings endpoint."""
+        from exo.api.embedding_engine import EmbeddingEngine
+
+        if self._embedding_engine is None:
+            self._embedding_engine = EmbeddingEngine()
+
+        texts = [request.input] if isinstance(request.input, str) else request.input
+        if not texts:
+            raise HTTPException(status_code=400, detail="input must not be empty")
+
+        try:
+            vectors, token_count = await self._embedding_engine.embed(
+                model_id=request.model,
+                texts=texts,
+                encoding_format=request.encoding_format,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}")
+
+        data = [
+            {"object": "embedding", "index": i, "embedding": v}
+            for i, v in enumerate(vectors)
+        ]
+        return JSONResponse({
+            "object": "list",
+            "data": data,
+            "model": request.model,
+            "usage": {
+                "prompt_tokens": token_count,
+                "total_tokens": token_count,
+            },
         })
