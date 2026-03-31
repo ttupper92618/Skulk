@@ -491,6 +491,10 @@ class DownloadCoordinator:
                 ) in self.shard_downloader.get_shard_download_status():
                     model_id = progress.shard.model_card.model_id
 
+                    # Skip models with no local data — they were never downloaded
+                    if progress.downloaded.in_bytes == 0 and progress.status in ("not_started", "in_progress"):
+                        continue
+
                     logger.info(
                         f"DownloadCoordinator scan: {model_id} status={progress.status} "
                         f"downloaded={progress.downloaded.in_bytes} total={progress.total.in_bytes} "
