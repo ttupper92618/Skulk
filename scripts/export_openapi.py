@@ -11,6 +11,11 @@ from exo.api.main import API
 from exo.shared.types.common import NodeId
 from exo.utils.channels import channel
 
+REDOC_BUNDLE_URL = (
+    "https://cdn.jsdelivr.net/npm/redoc@2.4.0/bundles/redoc.standalone.js"
+)
+REDOC_DOWNLOAD_TIMEOUT_SECONDS = 30
+
 
 def build_docs_api() -> API:
     command_sender, _ = channel()
@@ -40,9 +45,8 @@ def write_openapi(output_path: Path) -> None:
 def write_redoc_html(output_path: Path, openapi_json_path: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     redoc_bundle_path = output_path.parent / "redoc.standalone.js"
-    redoc_bundle_path.write_bytes(
-        urlopen("https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js").read()
-    )
+    with urlopen(REDOC_BUNDLE_URL, timeout=REDOC_DOWNLOAD_TIMEOUT_SECONDS) as response:
+        redoc_bundle_path.write_bytes(response.read())
     output_path.write_text(
         f"""<!doctype html>
 <html lang="en">
