@@ -151,7 +151,7 @@ Clone the repo, build the dashboard, and run Skulk:
 
 ```bash
 # Clone the repo
-git clone https://github.com/ttupper92618/Skulk.git
+git clone https://github.com/foxlight-foundation/Skulk.git
 
 # Build dashboard
 cd Skulk/dashboard && npm install && npm run build && cd ..
@@ -251,7 +251,7 @@ Clone the repo, build the dashboard, and run Skulk:
 
 ```bash
 # Clone the repo
-git clone https://github.com/ttupper92618/Skulk.git
+git clone https://github.com/foxlight-foundation/Skulk.git
 
 # Build dashboard
 cd Skulk/dashboard && npm install && npm run build && cd ..
@@ -265,7 +265,7 @@ uv run exo
 
 This starts the Skulk dashboard and API at http://localhost:52415/
 
-**Important note for Linux users:** Currently, Skulk runs on CPU on Linux. GPU support for Linux platforms is under development. If you'd like to see support for your specific Linux hardware, please [search for existing feature requests](https://github.com/ttupper92618/Skulk/issues) or create a new one.
+**Important note for Linux users:** Currently, Skulk runs on CPU on Linux. GPU support for Linux platforms is under development. If you'd like to see support for your specific Linux hardware, please [search for existing feature requests](https://github.com/foxlight-foundation/Skulk/issues) or create a new one.
 
 **Configuration Options:**
 
@@ -599,7 +599,7 @@ The tool outputs performance metrics including prompt tokens per second (prompt_
 
 ## **Hardware Accelerator Support**
 
-On macOS, Skulk uses the GPU. On Linux, Skulk currently runs on CPU. We are working on extending hardware accelerator support. If you'd like support for a new hardware platform, please [search for an existing feature request](https://github.com/ttupper92618/Skulk/issues) and add a thumbs up so we know what hardware is important to the community.
+On macOS, Skulk uses the GPU. On Linux, Skulk currently runs on CPU. We are working on extending hardware accelerator support. If you'd like support for a new hardware platform, please [search for an existing feature request](https://github.com/foxlight-foundation/Skulk/issues) and add a thumbs up so we know what hardware is important to the community.
 
 ---
 

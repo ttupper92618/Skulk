@@ -28,7 +28,7 @@ To run Skulk from source:
   ```
 
 ```bash
-git clone https://github.com/ttupper92618/Skulk.git
+git clone https://github.com/foxlight-foundation/Skulk.git
 cd Skulk/dashboard && npm install && npm run build && cd ..
 uv sync
 uv run exo
@@ -201,4 +201,4 @@ If you find a bug or have a feature request, please open an issue on GitHub with
 
 ## Questions?
 
-Open an issue or discussion on the [Skulk repository](https://github.com/ttupper92618/Skulk).
+Open an issue or discussion on the [Skulk repository](https://github.com/foxlight-foundation/Skulk).
