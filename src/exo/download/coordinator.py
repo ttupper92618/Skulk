@@ -480,78 +480,79 @@ class DownloadCoordinator:
             del self.download_status[model_id]
 
     async def _emit_existing_download_progress(self) -> None:
+        hf_scan_done = False
         while True:
             try:
-                logger.debug(
-                    "DownloadCoordinator: Fetching and emitting existing download progress..."
-                )
-                async for (
-                    _,
-                    progress,
-                ) in self.shard_downloader.get_shard_download_status():
-                    model_id = progress.shard.model_card.model_id
-
-                    # Skip models with no local data — they were never downloaded
-                    if progress.downloaded.in_bytes == 0 and progress.status in ("not_started", "in_progress"):
-                        continue
-
-                    logger.info(
-                        f"DownloadCoordinator scan: {model_id} status={progress.status} "
-                        f"downloaded={progress.downloaded.in_bytes} total={progress.total.in_bytes} "
-                        f"completed_files={progress.completed_files}/{progress.total_files}"
+                # HF download status scan — only run once at startup to detect
+                # interrupted downloads. No need to poll HF every 60 seconds.
+                if not hf_scan_done:
+                    hf_scan_done = True
+                    logger.debug(
+                        "DownloadCoordinator: One-time scan for existing HF download progress..."
                     )
+                    async for (
+                        _,
+                        progress,
+                    ) in self.shard_downloader.get_shard_download_status():
+                        model_id = progress.shard.model_card.model_id
 
-                    # Active downloads emit progress via the callback — don't overwrite
-                    if model_id in self.active_downloads:
-                        continue
-
-                    if progress.status == "complete":
-                        status: DownloadProgress = DownloadCompleted(
-                            node_id=self.node_id,
-                            shard_metadata=progress.shard,
-                            total=progress.total,
-                            model_directory=self._model_dir(
-                                progress.shard.model_card.model_id
-                            ),
-                        )
-                    elif progress.status in ["in_progress", "not_started"]:
-                        # Skip models with no local bytes — they were never
-                        # downloaded and shouldn't appear in the downloads list.
+                        # Skip models with no local data
                         if progress.downloaded.in_bytes == 0:
                             continue
-                        if progress.downloaded_this_session.in_bytes == 0:
-                            status = DownloadPending(
-                                node_id=self.node_id,
-                                shard_metadata=progress.shard,
-                                model_directory=self._model_dir(
-                                    progress.shard.model_card.model_id
-                                ),
-                                downloaded=progress.downloaded,
-                                total=progress.total,
-                            )
-                        else:
-                            status = DownloadOngoing(
-                                node_id=self.node_id,
-                                shard_metadata=progress.shard,
-                                download_progress=map_repo_download_progress_to_download_progress_data(
-                                    progress
-                                ),
-                                model_directory=self._model_dir(
-                                    progress.shard.model_card.model_id
-                                ),
-                            )
-                    else:
-                        continue
 
-                    self.download_status[progress.shard.model_card.model_id] = status
-                    await self.event_sender.send(
-                        NodeDownloadProgress(download_progress=status)
-                    )
-                # Scan EXO_MODELS_PATH for pre-downloaded models
+                        logger.info(
+                            f"DownloadCoordinator scan: {model_id} status={progress.status} "
+                            f"downloaded={progress.downloaded.in_bytes} total={progress.total.in_bytes} "
+                            f"completed_files={progress.completed_files}/{progress.total_files}"
+                        )
+
+                        if model_id in self.active_downloads:
+                            continue
+
+                        if progress.status == "complete":
+                            status: DownloadProgress = DownloadCompleted(
+                                node_id=self.node_id,
+                                shard_metadata=progress.shard,
+                                total=progress.total,
+                                model_directory=self._model_dir(
+                                    progress.shard.model_card.model_id
+                                ),
+                            )
+                        elif progress.status in ["in_progress", "not_started"]:
+                            if progress.downloaded_this_session.in_bytes == 0:
+                                status = DownloadPending(
+                                    node_id=self.node_id,
+                                    shard_metadata=progress.shard,
+                                    model_directory=self._model_dir(
+                                        progress.shard.model_card.model_id
+                                    ),
+                                    downloaded=progress.downloaded,
+                                    total=progress.total,
+                                )
+                            else:
+                                status = DownloadOngoing(
+                                    node_id=self.node_id,
+                                    shard_metadata=progress.shard,
+                                    download_progress=map_repo_download_progress_to_download_progress_data(
+                                        progress
+                                    ),
+                                    model_directory=self._model_dir(
+                                        progress.shard.model_card.model_id
+                                    ),
+                                )
+                        else:
+                            continue
+
+                        self.download_status[progress.shard.model_card.model_id] = status
+                        await self.event_sender.send(
+                            NodeDownloadProgress(download_progress=status)
+                        )
+
+                # Scan EXO_MODELS_PATH for pre-downloaded models (runs every cycle)
                 import exo.shared.constants as _dbg_constants
 
                 _search_paths = _dbg_constants.EXO_MODELS_PATH
-                logger.info(f"DownloadCoordinator: EXO_MODELS_PATH={_search_paths}")
+                logger.debug(f"DownloadCoordinator: EXO_MODELS_PATH={_search_paths}")
                 if EXO_MODELS_PATH is not None:
                     for card in await get_model_cards():
                         mid = card.model_id
