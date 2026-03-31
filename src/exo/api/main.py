@@ -63,10 +63,13 @@ from exo.api.types import (
     CreateInstanceParams,
     CreateInstanceResponse,
     DeleteDownloadResponse,
-    EmbeddingRequest,
     DeleteInstanceResponse,
     DeleteTracesRequest,
     DeleteTracesResponse,
+    EmbeddingObject,
+    EmbeddingRequest,
+    EmbeddingResponse,
+    EmbeddingUsage,
     ErrorInfo,
     ErrorResponse,
     FinishReason,
@@ -141,6 +144,7 @@ from exo.shared.models.model_cards import (
 )
 from exo.shared.tracing import TraceEvent, compute_stats, export_trace, load_trace_file
 from exo.shared.types.chunks import (
+    EmbeddingChunk,
     ErrorChunk,
     ImageChunk,
     InputImageChunk,
@@ -165,6 +169,7 @@ from exo.shared.types.commands import (
     StartDownload,
     TaskCancelled,
     TaskFinished,
+    TextEmbedding,
     TextGeneration,
 )
 from exo.shared.types.common import CommandId, Id, NodeId, SystemId
@@ -234,7 +239,6 @@ class API:
         self._store_client = store_client
         self._config_path = Path("exo.yaml")
         self._model_optimizer: "ModelOptimizer | None" = None
-        self._embedding_engine: "EmbeddingEngine | None" = None
         # Initialize optimizer if store path is available
         if exo_config and exo_config.model_store and exo_config.model_store.enabled:
             from exo.store.model_optimizer import ModelOptimizer
@@ -273,6 +277,9 @@ class API:
         self._image_generation_queues: dict[
             CommandId, Sender[ImageChunk | ErrorChunk]
         ] = {}
+        self._embedding_queues: dict[
+            CommandId, Sender[EmbeddingChunk | ErrorChunk]
+        ] = {}
         self._image_store = ImageStore(EXO_IMAGE_CACHE_DIR)
         self._tg: TaskGroup = TaskGroup()
 
@@ -284,6 +291,7 @@ class API:
         self._system_id = SystemId()
         self._text_generation_queues = {}
         self._image_generation_queues = {}
+        self._embedding_queues = {}
         self.unpause(result_clock)
         self.event_receiver.close()
         self.event_receiver = event_receiver
@@ -615,9 +623,11 @@ class API:
 
     async def cancel_command(self, command_id: CommandId) -> CancelCommandResponse:
         """Cancel an active command by closing its stream and notifying workers."""
-        sender = self._text_generation_queues.get(
-            command_id
-        ) or self._image_generation_queues.get(command_id)
+        sender = (
+            self._text_generation_queues.get(command_id)
+            or self._image_generation_queues.get(command_id)
+            or self._embedding_queues.get(command_id)
+        )
         if sender is None:
             raise HTTPException(
                 status_code=404,
@@ -1593,6 +1603,9 @@ class API:
         # Tensor parallel support
         if card.supports_tensor:
             tags.append("tensor")
+        # Embedding models
+        if "embedding" in card.capabilities:
+            tags.append("embedding")
         return tags
 
     async def get_models(self, status: str | None = Query(default=None)) -> ModelList:
@@ -1769,11 +1782,19 @@ class API:
                     if queue := self._text_generation_queues.get(
                         event.command_id, None
                     ):
-                        assert not isinstance(event.chunk, ImageChunk)
+                        assert not isinstance(event.chunk, (ImageChunk, EmbeddingChunk))
                         try:
                             await queue.send(event.chunk)
                         except BrokenResourceError:
                             self._text_generation_queues.pop(event.command_id, None)
+                    if queue := self._embedding_queues.get(
+                        event.command_id, None
+                    ):
+                        assert isinstance(event.chunk, (EmbeddingChunk, ErrorChunk))
+                        try:
+                            await queue.send(event.chunk)
+                        except BrokenResourceError:
+                            self._embedding_queues.pop(event.command_id, None)
                 if isinstance(event, TracesMerged):
                     self._save_merged_trace(event)
 
@@ -2204,35 +2225,73 @@ class API:
         })
 
     async def embeddings(self, request: EmbeddingRequest) -> JSONResponse:
-        """OpenAI-compatible embeddings endpoint."""
-        from exo.api.embedding_engine import EmbeddingEngine
-
-        if self._embedding_engine is None:
-            self._embedding_engine = EmbeddingEngine()
+        """OpenAI-compatible embeddings endpoint — routes through cluster pipeline."""
+        from exo.shared.types.embedding import TextEmbeddingTaskParams
 
         texts = [request.input] if isinstance(request.input, str) else request.input
         if not texts:
             raise HTTPException(status_code=400, detail="input must not be empty")
 
-        try:
-            vectors, token_count = await self._embedding_engine.embed(
-                model_id=request.model,
-                texts=texts,
+        model_id = ModelId(request.model)
+        command = TextEmbedding(
+            task_params=TextEmbeddingTaskParams(
+                model=model_id,
+                input_texts=texts,
                 encoding_format=request.encoding_format,
             )
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}")
+        )
+        command_id = command.command_id
 
-        data = [
-            {"object": "embedding", "index": i, "embedding": v}
-            for i, v in enumerate(vectors)
-        ]
-        return JSONResponse({
-            "object": "list",
-            "data": data,
-            "model": request.model,
-            "usage": {
-                "prompt_tokens": token_count,
-                "total_tokens": token_count,
-            },
-        })
+        try:
+            self._embedding_queues[command_id], recv = channel[
+                EmbeddingChunk | ErrorChunk
+            ]()
+
+            await self._send(command)
+
+            with recv as chunks:
+                async for chunk in chunks:
+                    if isinstance(chunk, ErrorChunk):
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Embedding failed: {chunk.error_message}",
+                        )
+                    import base64
+                    import struct
+
+                    embeddings_data: list[list[float] | str] = []
+                    for emb in chunk.embeddings:
+                        if request.encoding_format == "base64":
+                            b64 = base64.b64encode(
+                                struct.pack(f"<{len(emb)}f", *emb)
+                            ).decode("ascii")
+                            embeddings_data.append(b64)
+                        else:
+                            embeddings_data.append(emb)
+
+                    response = EmbeddingResponse(
+                        data=[
+                            EmbeddingObject(index=idx, embedding=emb_data)
+                            for idx, emb_data in enumerate(embeddings_data)
+                        ],
+                        model=request.model,
+                        usage=EmbeddingUsage(
+                            prompt_tokens=chunk.token_count,
+                            total_tokens=chunk.token_count,
+                        ),
+                    )
+                    return JSONResponse(response.model_dump())
+
+            raise HTTPException(status_code=500, detail="No embedding response received")
+
+        except anyio.get_cancelled_exc_class():
+            cancel_command = TaskCancelled(cancelled_command_id=command_id)
+            with anyio.CancelScope(shield=True):
+                await self.command_sender.send(
+                    ForwarderCommand(origin=self._system_id, command=cancel_command)
+                )
+            raise
+        finally:
+            await self._send(TaskFinished(finished_command_id=command_id))
+            if command_id in self._embedding_queues:
+                del self._embedding_queues[command_id]

@@ -16,6 +16,8 @@ export interface PlacementManagerProps {
   open: boolean;
   onClose: () => void;
   onLaunch: (params: { modelId: string; sharding: string; instanceMeta: string; minNodes: number }) => void;
+  /** Embedding models: hide sharding/networking selectors and node slider */
+  isEmbedding?: boolean;
 }
 
 interface ComboStatus {
@@ -238,7 +240,7 @@ const CardWrapper = styled.div`
 
 /* ── Component ────────────────────────────────────────── */
 
-export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose, onLaunch }: PlacementManagerProps) {
+export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose, onLaunch, isEmbedding }: PlacementManagerProps) {
   const [previews, setPreviews] = useState<PlacementPreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [minNodes, setMinNodes] = useState(1);
@@ -397,6 +399,37 @@ export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose
         <Body>
           {loading ? (
             <Loading>Analyzing placement options...</Loading>
+          ) : isEmbedding ? (
+            /* ── Simplified embedding placement ─────────────── */
+            <>
+              <Section>
+                <SectionLabel>Cluster Preview</SectionLabel>
+                <CardWrapper>
+                  <ModelCard
+                    model={{ id: modelId, name: modelLabel(modelId), storage_size_megabytes: modelSizeMb }}
+                    nodes={topology?.nodes ?? {}}
+                    sharding="Pipeline"
+                    runtime="MlxRing"
+                    apiPreview={currentPreview}
+                    hideActions
+                  />
+                </CardWrapper>
+              </Section>
+
+              {!anyPlacementPossible && placementError && (
+                <ErrorCallout>
+                  <FiInfo size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                  {placementError}
+                </ErrorCallout>
+              )}
+
+              {anyPlacementPossible && (
+                <Callout>
+                  <FiInfo size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  Embedding models run on a single node. The cluster will automatically select the best node.
+                </Callout>
+              )}
+            </>
           ) : (
             <>
               {/* Cluster visualization via ModelCard */}

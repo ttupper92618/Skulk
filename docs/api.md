@@ -532,7 +532,7 @@ Same as `/v1/chat/completions` but returns performance metrics:
 
 | Feature | Status |
 |---------|--------|
-| `/v1/embeddings` | Not implemented — planned |
+| `/v1/embeddings` | Supported — requires placed embedding model |
 | JSON mode enforcement | `response_format` accepted but not enforced |
 | JSON schema validation | Not implemented — planned |
 | `/v1/batches` | Not implemented |
