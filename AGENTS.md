@@ -10,7 +10,7 @@ exo is a distributed AI inference system that connects multiple devices into a c
 
 ```bash
 # Build the dashboard (required before running exo)
-cd dashboard && npm install && npm run build && cd ..
+cd dashboard-react && npm install && npm run build && cd ..
 
 # Run exo (starts both master and worker with API at http://localhost:52415)
 uv run exo
@@ -125,7 +125,7 @@ Tests use pytest-asyncio with `asyncio_mode = "auto"`. Tests are in `tests/` sub
 ### Building and Running the Dashboard
 ```bash
 # Build the dashboard (must be done before running exo)
-cd dashboard && npm install && npm run build && cd ..
+cd dashboard-react && npm install && npm run build && cd ..
 
 # Start exo (serves the dashboard at http://localhost:52415)
 uv run exo &
