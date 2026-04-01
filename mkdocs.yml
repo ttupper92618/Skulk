@@ -1,11 +1,22 @@
 site_name: Skulk Developer Docs
-site_description: Generated and hand-written developer documentation for Skulk
+site_description: Developer documentation for Skulk
 repo_url: https://github.com/Foxlight-Foundation/Skulk
 theme:
-  name: shadcn
+  name: material
+  palette:
+    scheme: slate
+    primary: custom
+    accent: amber
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
 
 docs_dir: docs
 site_dir: site
+
+extra_css:
+  - css/custom.css
 
 nav:
   - Home: index.md
@@ -16,5 +27,5 @@ nav:
       - Architecture: architecture.md
   - Reference:
       - OpenAPI Schema: reference/openapi.md
-      - API Reference (ReDoc): reference/api-reference.md
+      - API Reference: reference/api-reference.md
       - TypeDoc: reference/typedoc.md
