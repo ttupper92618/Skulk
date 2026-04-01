@@ -176,7 +176,14 @@ class Runner:
                 self.model = AutoModel.from_pretrained(
                     local_path, trust_remote_code=False, local_files_only=True
                 )
-                self.model.to(self.device)
+                try:
+                    self.model.to(self.device)
+                except Exception as exc:
+                    logger.opt(exception=exc).warning(
+                        f"failed to move model to {self.device}, falling back to CPU"
+                    )
+                    self.device = torch.device("cpu")
+                    self.model.to(self.device)
                 self.model.eval()
                 logger.info(f"embedding model on device: {self.device}")
 
