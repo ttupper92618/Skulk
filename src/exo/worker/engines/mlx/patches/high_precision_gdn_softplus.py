@@ -1,3 +1,10 @@
+"""Patch GatedDeltaNet's ``compute_g`` to use float32 for the softplus gate.
+
+The default bfloat16 softplus in ``gated_delta`` loses precision for large
+inputs, producing NaN or clipped activations. Casting to float32 before
+the exp/log1p and back afterwards fixes this with negligible overhead.
+"""
+
 import sys
 
 import mlx.core as mx
@@ -16,6 +23,7 @@ def _compute_g_f32(a_log: mx.array, a: mx.array, dt_bias: mx.array) -> mx.array:
 
 
 def patch_gdn_softplus() -> None:
+    """Replace ``gated_delta.compute_g`` with a float32-safe version globally."""
     from mlx_lm.models import gated_delta
 
     gated_delta.compute_g = _compute_g_f32

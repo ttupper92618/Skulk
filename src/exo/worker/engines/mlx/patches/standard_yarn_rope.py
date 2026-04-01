@@ -1,3 +1,12 @@
+"""Patch mlx-lm YarnRoPE to use vLLM-compatible inverse-frequency blending.
+
+The upstream mlx-lm ``YarnRoPE`` implementation differs from the vLLM reference
+in how it blends interpolation and extrapolation frequencies. This patch
+replaces both ``YarnRoPE.__init__`` and ``initialize_rope`` so that models
+using YaRN (e.g. DeepSeek, Qwen with long context) produce identical
+positional encodings to vLLM, ensuring cross-framework compatibility.
+"""
+
 import math
 
 import mlx.core as mx
@@ -114,5 +123,6 @@ def _patched_initialize_rope(
 
 
 def patch_yarn_rope() -> None:
+    """Replace mlx-lm's YarnRoPE init and rope factory with patched versions."""
     rope_utils.YarnRoPE.__init__ = _patched_yarn_init
     rope_utils.initialize_rope = _patched_initialize_rope

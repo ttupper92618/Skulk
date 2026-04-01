@@ -1,3 +1,12 @@
+"""Optimised ``BatchGenerator.next()`` for decode-only steps.
+
+Replaces the default mlx-lm ``BatchGenerator.next`` with a faster path that
+precomputes top-k logprobs asynchronously during decode. The precomputed
+values are attached to the ``Response`` object and consumed by
+``extract_top_logprobs`` one step later, overlapping GPU work with token
+emission.
+"""
+
 import time
 from typing import Any, cast
 
@@ -170,4 +179,5 @@ def _patched_public_next(self: BatchGenerator) -> list[BatchGenerator.Response]:
 
 
 def apply_batch_gen_patch() -> None:
+    """Monkey-patch ``BatchGenerator.next`` with the optimised decode path."""
     BatchGenerator.next = _patched_public_next

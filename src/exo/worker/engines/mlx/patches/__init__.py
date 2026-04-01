@@ -1,3 +1,10 @@
+"""Runtime patches applied to mlx-lm before inference.
+
+These patches fix correctness and performance issues in upstream mlx-lm that
+haven't been merged yet, or that require exo-specific behaviour. Every patch
+is idempotent and applied once via :func:`apply_mlx_patches`.
+"""
+
 from exo.worker.engines.mlx.patches.high_precision_gdn_softplus import (
     patch_gdn_softplus,
 )
@@ -8,6 +15,7 @@ _applied = False
 
 
 def apply_mlx_patches() -> None:
+    """Apply all mlx-lm runtime patches (idempotent)."""
     global _applied
     if _applied:
         return
