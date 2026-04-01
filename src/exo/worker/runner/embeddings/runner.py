@@ -92,6 +92,10 @@ class Runner:
         )
 
         logger.info("hello from the embedding runner")
+        if self.shard_metadata.world_size != 1:
+            raise RuntimeError(
+                f"Embedding runner requires single-node placement, got world_size={self.shard_metadata.world_size}"
+            )
         self.setup_start_time = time.time()
         self.cancelled_tasks = set[TaskId]()
 

@@ -364,7 +364,10 @@ export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose
 
   if (!open) return null;
 
-  const canLaunch = currentCombo?.available ?? false;
+  const embeddingComboAvailable = isEmbedding
+    ? (optionsByNodeCount[1]?.pipeline_ring?.available ?? false)
+    : false;
+  const canLaunch = isEmbedding ? embeddingComboAvailable : (currentCombo?.available ?? false);
   const pipelineRing = currentOptions?.pipeline_ring;
   const pipelineJaccl = currentOptions?.pipeline_jaccl;
   const tensorRing = currentOptions?.tensor_ring;
