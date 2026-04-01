@@ -354,9 +354,13 @@ export function PlacementManager({ modelId, modelSizeMb, topology, open, onClose
   }, [minNodes, currentOptions, currentKey]);
 
   const handleLaunch = useCallback(() => {
-    onLaunch({ modelId, sharding, instanceMeta, minNodes });
+    if (isEmbedding) {
+      onLaunch({ modelId, sharding: 'Pipeline', instanceMeta: 'MlxRing', minNodes: 1 });
+    } else {
+      onLaunch({ modelId, sharding, instanceMeta, minNodes });
+    }
     onClose();
-  }, [modelId, sharding, instanceMeta, minNodes, onLaunch, onClose]);
+  }, [modelId, sharding, instanceMeta, minNodes, isEmbedding, onLaunch, onClose]);
 
   if (!open) return null;
 

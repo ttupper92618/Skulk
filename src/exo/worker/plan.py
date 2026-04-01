@@ -276,8 +276,7 @@ def _pending_tasks(
     input_chunk_buffer: Mapping[CommandId, dict[int, str]],
 ) -> Task | None:
     for task in tasks.values():
-        # for now, just forward chat completions
-        # TODO(ciaran): do this better!
+        # Forward inference tasks to runners
         if not isinstance(
             task, (TextGeneration, ImageGeneration, ImageEdits, TextEmbedding)
         ):

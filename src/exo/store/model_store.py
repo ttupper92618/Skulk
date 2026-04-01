@@ -379,9 +379,9 @@ class ModelStore:
                 def make_progress_cb(fsize: int):
                     def cb(curr: int, total: int, is_renamed: bool) -> None:
                         nonlocal downloaded_bytes
-                        status.progress = (downloaded_bytes + curr) / max(
+                        status.progress = (downloaded_bytes + curr) / max(  # noqa: B023
                             total_bytes, 1
-                        )  # noqa: B023
+                        )
 
                     return cb
 
