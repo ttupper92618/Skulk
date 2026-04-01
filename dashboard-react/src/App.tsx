@@ -137,7 +137,11 @@ export function App() {
     if (entries.length >= 2) {
       const commits = new Set(entries.map((n) => n.exo_commit));
       if (commits.size > 1) {
-        const details = entries.map((n) => `${n.friendly_name ?? 'Unknown'} (${n.exo_version ?? '?'})`).join(', ');
+        const details = entries.map((n) => {
+          const ver = n.exo_version ?? '?';
+          const commit = n.exo_commit?.slice(0, 7);
+          return `${n.friendly_name ?? 'Unknown'} (${ver}${commit ? `-${commit}` : ''})`;
+        }).join(', ');
         items.push({ level: 'error', message: `Version mismatch: ${details}. Update all nodes with git pull && uv sync.` });
       }
     }
