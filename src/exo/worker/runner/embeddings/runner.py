@@ -42,8 +42,17 @@ from exo.utils.channels import MpReceiver, MpSender
 from exo.worker.runner.bootstrap import logger
 
 
+def _get_device() -> torch.device:
+    """Pick the best available device: MPS (Apple Silicon) > CUDA > CPU."""
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
 def _forward(
-    model: Any, tokenizer: Any, texts: list[str]
+    model: Any, tokenizer: Any, texts: list[str], device: torch.device
 ) -> tuple[list[list[float]], int]:
     """Run embedding forward pass: tokenize -> model -> mean pool -> L2 normalize."""
     inputs = tokenizer(
@@ -54,6 +63,7 @@ def _forward(
         max_length=512,
     )
     token_count = int(inputs["attention_mask"].sum().item())
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = model(**inputs)
@@ -101,6 +111,7 @@ class Runner:
 
         self.model: Any = None
         self.tokenizer: Any = None
+        self.device: torch.device = torch.device("cpu")
 
         self.current_status: RunnerStatus = RunnerIdle()
         logger.info("embedding runner created")
@@ -161,10 +172,13 @@ class Runner:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     local_path, local_files_only=True
                 )
+                self.device = _get_device()
                 self.model = AutoModel.from_pretrained(
                     local_path, trust_remote_code=False, local_files_only=True
                 )
+                self.model.to(self.device)
                 self.model.eval()
+                logger.info(f"embedding model on device: {self.device}")
 
                 # Skip straight to Ready — no warmup needed for embedding models
                 self.current_status = RunnerReady()
@@ -184,7 +198,7 @@ class Runner:
 
                 try:
                     result_embeddings, token_count = _forward(
-                        self.model, self.tokenizer, task_params.input_texts
+                        self.model, self.tokenizer, task_params.input_texts, self.device
                     )
                     self.event_sender.send(
                         ChunkGenerated(
