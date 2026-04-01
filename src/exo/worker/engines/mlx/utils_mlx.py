@@ -530,7 +530,7 @@ def apply_chat_template(
 
         prompt = encode_messages(
             messages=formatted_messages,
-            # Only use chat mode if enable thinking is explicitly Fakse.
+            # Only use chat mode if enable thinking is explicitly False.
             thinking_mode="chat"
             if task_params.enable_thinking is False
             else "thinking",

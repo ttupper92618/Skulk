@@ -133,7 +133,7 @@ class RunnerSupervisor:
 
             if self.runner_process.is_alive():
                 logger.warning(
-                    "Runner process didn't shutdown succesfully, terminating"
+                    "Runner process didn't shutdown successfully, terminating"
                 )
                 self.runner_process.terminate()
                 self.runner_process.join(timeout=5)
@@ -143,7 +143,7 @@ class RunnerSupervisor:
                     self.runner_process.kill()
                     self.runner_process.join(timeout=5)
             else:
-                logger.info("Runner process succesfully terminated")
+                logger.info("Runner process successfully terminated")
 
             self.runner_process.close()
 
