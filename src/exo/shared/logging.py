@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import socket
@@ -100,7 +101,9 @@ def _json_sink(message: Message) -> None:
         except (BrokenPipeError, OSError):
             # Vector (or whatever reads stdout) has exited — disable the sink
             # to avoid spamming errors. Local file and stderr sinks still work.
-            logger.remove(_json_sink_id)
+            if _json_sink_id is not None:
+                with contextlib.suppress(ValueError):
+                    logger.remove(_json_sink_id)
             logger.warning(
                 "Structured stdout consumer disconnected — JSON sink disabled"
             )
