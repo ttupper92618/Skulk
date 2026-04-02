@@ -129,6 +129,18 @@ These rules apply to every change. No exceptions.
 - **Use `@final` and immutability wherever applicable.**
 - **Comments explain why, not what.** Every non-obvious decision, workaround, or architectural choice gets a comment explaining the reasoning.
 
+### Handling Review Comments
+
+Evaluate each review comment on a 1–5 severity scale:
+
+- **1 — Nitpick**: Style preferences, minor wording, subjective suggestions. Ignore.
+- **2 — Low**: Nice-to-have improvements, minor refactors, cosmetic. Ignore.
+- **3 — Medium**: Valid point but not blocking. Note for future work, do not fix in this PR.
+- **4 — High**: Real bug, meaningful correctness issue, missing test coverage for critical path. **Fix.**
+- **5 — Critical**: Security vulnerability, data loss risk, will break production. **Fix immediately.**
+
+Only fix comments rated 4 or 5. Do not iterate on minor wording, style, or speculative improvements from automated reviewers (e.g., Copilot). Time spent on low-severity feedback is time not spent on real work.
+
 ### Before Every Commit
 
 1. Run the pre-commit checks (type check, lint, format, test) as documented above.
