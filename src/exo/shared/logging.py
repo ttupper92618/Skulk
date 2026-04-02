@@ -145,7 +145,7 @@ def logger_setup(
     if structured_stdout:
         logger.add(
             _json_sink,
-            level="DEBUG",
+            level="INFO",
             enqueue=True,
         )
 
