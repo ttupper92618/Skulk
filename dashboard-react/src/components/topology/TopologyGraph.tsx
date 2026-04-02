@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { TopologyData, TopologyEdge } from '../../types/topology';
 import { useResizeObserver } from '../../hooks/useResizeObserver';
@@ -97,6 +97,18 @@ const Container = styled.div`
 
 export function TopologyGraph({ data }: TopologyGraphProps) {
   const [svgRef, { width, height }] = useResizeObserver<SVGSVGElement>();
+  const [localNodeId, setLocalNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/node_id')
+      .then((r) => r.json())
+      .then((id) => setLocalNodeId(String(id)))
+      .catch(() => {});
+  }, []);
+
+  const handleRestart = useCallback(() => {
+    fetch('/admin/restart', { method: 'POST' }).catch(() => {});
+  }, []);
 
   const nodeIds = useMemo(() => Object.keys(data.nodes), [data.nodes]);
 
@@ -229,6 +241,7 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
               scale={nodeScale}
               edges={data.edges}
               allNodes={data.nodes}
+              onRestart={pos.id === localNodeId ? handleRestart : undefined}
             />
           ))}
         </g>

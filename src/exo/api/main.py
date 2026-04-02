@@ -760,6 +760,16 @@ class API:
                 "Use this for workflows such as OptiQ conversion or alternate artifact generation."
             ),
         )(self.optimize_model)
+        self.app.post(
+            "/admin/restart",
+            tags=["Admin"],
+            summary="Restart this node",
+            description=(
+                "Gracefully restart the exo process on this node. "
+                "Active inference is interrupted, GPU memory is fully released, "
+                "and the node rejoins the cluster automatically on startup."
+            ),
+        )(self.restart_node)
         self.app.get(
             "/store/models/{model_id:path}/optimize/status",
             tags=["Store"],
@@ -2800,3 +2810,24 @@ class API:
             await self._send(TaskFinished(finished_command_id=command_id))
             if command_id in self._embedding_queues:
                 del self._embedding_queues[command_id]
+
+    async def restart_node(self) -> JSONResponse:
+        """Restart the exo process on this node.
+
+        Schedules a process restart via os.execv after a brief delay to allow
+        the HTTP response to be sent. The OS reclaims all GPU memory when the
+        process is replaced."""
+        import os
+        import sys
+        import threading
+
+        logger.info("Node restart requested via API — restarting in 1 second")
+
+        def _do_restart() -> None:
+            import time
+
+            time.sleep(1)  # Allow the JSON response to flush
+            os.execv(sys.executable, [sys.executable, *sys.argv])
+
+        threading.Thread(target=_do_restart, daemon=True).start()
+        return JSONResponse({"status": "restarting", "node_id": str(self.node_id)})
