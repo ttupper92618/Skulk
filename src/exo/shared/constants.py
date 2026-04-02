@@ -44,6 +44,17 @@ EXO_MODELS_PATH: tuple[Path, ...] | None = (
 )
 
 
+# Alias for upstream compatibility — upstream reworked EXO_MODELS_DIR into
+# a multi-directory tuple. Our model store handles directory management,
+# so this is just a single-element tuple wrapping the existing path.
+EXO_MODELS_DIRS: tuple[Path, ...] = (EXO_MODELS_DIR,)
+EXO_MODELS_READ_ONLY_DIRS: tuple[Path, ...] = (
+    tuple(Path(p).expanduser() for p in _EXO_MODELS_PATH_ENV.split(":") if p)
+    if _EXO_MODELS_PATH_ENV is not None
+    else ()
+)
+
+
 def add_model_search_path(path: Path) -> None:
     """Add a directory to the model search path at runtime.
 

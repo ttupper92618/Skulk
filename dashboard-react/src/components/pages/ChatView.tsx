@@ -176,14 +176,39 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
     return parts[parts.length - 1];
   }, [selectedModelId]);
 
-  const handleSend = useCallback(async (text: string, _files: ChatUploadedFile[]) => {
+  const handleSend = useCallback(async (text: string, files: ChatUploadedFile[]) => {
     if (!selectedModelId || isLoading) return;
+
+    // Convert image files to base64 data URLs for the API and message history
+    const imageAttachments: { dataUrl: string; file: ChatUploadedFile }[] = [];
+    for (const f of files) {
+      if (f.type.startsWith('image/') && f.preview) {
+        // f.preview is an object URL — read the file to get a data URL
+        const resp = await fetch(f.preview);
+        const blob = await resp.blob();
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        imageAttachments.push({ dataUrl, file: f });
+      }
+    }
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: text,
       timestamp: Date.now(),
+      attachments: imageAttachments.length > 0
+        ? imageAttachments.map(({ dataUrl, file: f }) => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            preview: dataUrl,
+          }))
+        : undefined,
     };
 
     addMessage(userMsg);
@@ -216,12 +241,29 @@ export function ChatView({ readyInstances, className }: ChatViewProps) {
     let lastTps: number | undefined;
 
     try {
+      // Build messages array — use multimodal content format when images are attached
+      const apiMessages = allMessages.map((m) => {
+        if (m.attachments?.some((a) => a.type.startsWith('image/') && a.preview)) {
+          const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+          for (const att of m.attachments) {
+            if (att.type.startsWith('image/') && att.preview) {
+              parts.push({ type: 'image_url', image_url: { url: att.preview } });
+            }
+          }
+          if (m.content) {
+            parts.push({ type: 'text', text: m.content });
+          }
+          return { role: m.role, content: parts };
+        }
+        return { role: m.role, content: m.content };
+      });
+
       const res = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: selectedModelId,
-          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
           stream: true,
           ...(thinkingEnabled ? { enable_thinking: true } : {}),
         }),
