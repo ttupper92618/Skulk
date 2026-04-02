@@ -1,5 +1,8 @@
+import gc
 import os
 import resource
+import signal
+import sys
 
 import loguru
 
@@ -11,6 +14,34 @@ from exo.utils.channels import ClosedResourceError, MpReceiver, MpSender
 
 logger: "loguru.Logger" = loguru.logger
 
+# Set by signal handler so the layer-by-layer loading loop can bail early.
+shutdown_requested: bool = False
+
+
+def _release_metal_resources() -> None:
+    """Best-effort release of Metal/MLX resources before process exit.
+
+    Clears the MLX buffer cache and runs garbage collection so that Metal
+    wired memory is returned to the OS instead of leaking when the runner
+    subprocess is terminated mid-load.
+    """
+    try:
+        import mlx.core as mx
+
+        mx.clear_cache()
+    except Exception:
+        pass
+    gc.collect()
+
+
+def _metal_cleanup_signal_handler(signum: int, _frame: object) -> None:
+    """Handle SIGTERM/SIGINT by cleaning up Metal resources, then exiting."""
+    global shutdown_requested
+    shutdown_requested = True
+    logger.info(f"Runner received signal {signum}, releasing Metal resources")
+    _release_metal_resources()
+    sys.exit(128 + signum)
+
 
 def entrypoint(
     bound_instance: BoundInstance,
@@ -21,6 +52,11 @@ def entrypoint(
 ) -> None:
     global logger
     logger = _logger
+
+    # Install signal handlers so that SIGTERM/SIGINT from the supervisor
+    # triggers Metal cleanup instead of an abrupt death that leaks wired RAM.
+    signal.signal(signal.SIGTERM, _metal_cleanup_signal_handler)
+    signal.signal(signal.SIGINT, _metal_cleanup_signal_handler)
 
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (min(max(soft, 2048), hard), hard))
@@ -62,6 +98,9 @@ def entrypoint(
 
     except ClosedResourceError:
         logger.warning("Runner communication closed unexpectedly")
+    except SystemExit:
+        # Raised by our signal handler — Metal cleanup already done.
+        logger.info("Runner exiting after signal cleanup")
     except Exception as e:
         logger.opt(exception=e).warning(
             f"Runner {bound_instance.bound_runner_id} crashed with critical exception {e}"
@@ -73,6 +112,10 @@ def entrypoint(
             )
         )
     finally:
+        # Safety net: release Metal resources on any exit path, even if the
+        # signal handler didn't fire (e.g. parent was SIGKILL'd and we got
+        # a broken pipe, or an unexpected exception during load).
+        _release_metal_resources()
         try:
             event_sender.close()
             task_receiver.close()
