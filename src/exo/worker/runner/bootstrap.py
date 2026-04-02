@@ -2,7 +2,6 @@ import gc
 import os
 import resource
 import signal
-import sys
 
 import loguru
 
@@ -35,12 +34,24 @@ def _release_metal_resources() -> None:
 
 
 def _metal_cleanup_signal_handler(signum: int, _frame: object) -> None:
-    """Handle SIGTERM/SIGINT by cleaning up Metal resources, then exiting."""
+    """Handle SIGTERM/SIGINT via cooperative cancellation.
+
+    Sets ``shutdown_requested`` so the per-layer load loop in
+    ``utils_mlx.py`` can bail early with ``InterruptedError``.  Then
+    raises ``InterruptedError`` directly so that code paths *outside*
+    the load loop (inference, idle) also terminate promptly.
+
+    ``InterruptedError`` is a subclass of ``Exception``, so it flows
+    through the ``except Exception`` block in ``entrypoint()`` which
+    reports ``RunnerFailed`` to the supervisor.  Metal cleanup happens
+    in the ``finally`` block of ``entrypoint()``.
+    """
     global shutdown_requested
     shutdown_requested = True
-    logger.info(f"Runner received signal {signum}, releasing Metal resources")
-    _release_metal_resources()
-    sys.exit(128 + signum)
+    logger.info(f"Runner received signal {signum}, requesting cooperative shutdown")
+    # Raise instead of sys.exit() so the normal exception path in
+    # entrypoint() can report RunnerFailed to the supervisor.
+    raise InterruptedError(f"Runner interrupted by signal {signum}")
 
 
 def entrypoint(
@@ -98,11 +109,6 @@ def entrypoint(
 
     except ClosedResourceError:
         logger.warning("Runner communication closed unexpectedly")
-    except SystemExit:
-        # Raised by our signal handler — Metal cleanup already done.
-        # Re-raise so the exit code (128 + signum) is preserved for the supervisor.
-        logger.info("Runner exiting after signal cleanup")
-        raise
     except Exception as e:
         logger.opt(exception=e).warning(
             f"Runner {bound_instance.bound_runner_id} crashed with critical exception {e}"
