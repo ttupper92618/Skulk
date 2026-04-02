@@ -12,16 +12,14 @@ def _reset_restart_state() -> None:
         restart._restart_scheduled = False
 
 
-def test_schedule_restart_spawns_process_and_exits() -> None:
-    """schedule_restart should Popen a new process and call os._exit."""
+def test_schedule_restart_calls_execv() -> None:
+    """schedule_restart should call os.execv to replace the process."""
     _reset_restart_state()
 
     with (
-        patch.object(restart.subprocess, "Popen") as mock_popen,
-        patch.object(restart.os, "_exit") as mock_exit,
+        patch.object(restart.os, "execv") as mock_execv,
         patch.object(restart.threading, "Thread") as mock_thread_cls,
     ):
-        # Capture the target function so we can run it synchronously
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
 
@@ -34,8 +32,7 @@ def test_schedule_restart_spawns_process_and_exits() -> None:
         with patch("time.sleep"):
             target_fn()
 
-        mock_popen.assert_called_once()
-        mock_exit.assert_called_once_with(0)
+        mock_execv.assert_called_once()
 
 
 def test_schedule_restart_idempotent() -> None:
@@ -52,15 +49,14 @@ def test_schedule_restart_idempotent() -> None:
         assert mock_thread_cls.call_count == 1
 
 
-def test_schedule_restart_recovers_on_popen_failure() -> None:
-    """If Popen fails, os._exit should NOT be called and the guard should reset."""
+def test_schedule_restart_recovers_on_execv_failure() -> None:
+    """If execv fails, the guard should reset so restart can be retried."""
     _reset_restart_state()
 
     with (
         patch.object(
-            restart.subprocess, "Popen", side_effect=OSError("spawn failed")
-        ) as mock_popen,
-        patch.object(restart.os, "_exit") as mock_exit,
+            restart.os, "execv", side_effect=OSError("exec failed")
+        ) as mock_execv,
         patch.object(restart.threading, "Thread") as mock_thread_cls,
     ):
         mock_thread = MagicMock()
@@ -73,8 +69,7 @@ def test_schedule_restart_recovers_on_popen_failure() -> None:
         with patch("time.sleep"):
             target_fn()
 
-        mock_popen.assert_called_once()
-        mock_exit.assert_not_called()
+        mock_execv.assert_called_once()
 
         # Guard should be reset so we can schedule again
         assert not restart._restart_scheduled

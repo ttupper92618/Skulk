@@ -99,7 +99,9 @@ export function TopologyGraph({ data }: TopologyGraphProps) {
   const [svgRef, { width, height }] = useResizeObserver<SVGSVGElement>();
 
   const handleRestart = useCallback((nodeId: string) => {
-    fetch(`/admin/restart?node_id=${encodeURIComponent(nodeId)}`, { method: 'POST' }).catch(() => {});
+    fetch(`/admin/restart?node_id=${encodeURIComponent(nodeId)}`, { method: 'POST' }).catch((error) => {
+      console.error('Failed to restart node', nodeId, error);
+    });
   }, []);
 
   const nodeIds = useMemo(() => Object.keys(data.nodes), [data.nodes]);

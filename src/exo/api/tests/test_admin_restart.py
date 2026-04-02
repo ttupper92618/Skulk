@@ -59,18 +59,15 @@ def test_restart_local_node_with_explicit_id() -> None:
 
 
 def test_restart_idempotent_returns_409() -> None:
-    """Second local restart call should return 409."""
+    """If schedule_restart returns False (already pending), API returns 409."""
     api = _build_api()
     client = TestClient(api.app)
 
-    with patch("exo.utils.restart.schedule_restart", return_value=True):
-        response1 = client.post("/admin/restart")
-    assert response1.status_code == 200
+    with patch("exo.utils.restart.schedule_restart", return_value=False):
+        response = client.post("/admin/restart")
 
-    # The API's _restart_pending flag is now True
-    response2 = client.post("/admin/restart")
-    assert response2.status_code == 409
-    data: dict[str, Any] = response2.json()
+    assert response.status_code == 409
+    data: dict[str, Any] = response.json()
     assert data["status"] == "restart_already_pending"
 
 

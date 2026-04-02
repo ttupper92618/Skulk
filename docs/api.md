@@ -567,6 +567,7 @@ Gracefully restart the exo process on this or a remote node. When `node_id` is o
 - active inference is interrupted
 
 Returns `{"status": "restarting", "node_id": "..."}` for local restarts, or `{"status": "restart_sent", "node_id": "..."}` for remote restarts.
+If a local restart is already scheduled, returns HTTP 409 with `{"status": "restart_already_pending"}`.
 
 ## State, Events, and Tracing
 

@@ -1,12 +1,11 @@
 """Utility for cleanly restarting the current exo process.
 
-Spawns a replacement process and exits the current one. The OS reclaims
-all GPU/Metal memory when the old process exits, and the new process
-takes over the port after a brief delay.
+Uses os.execv to replace the current process image with a fresh one.
+This guarantees the old process releases its port before the new one
+binds, and the OS reclaims all GPU/Metal memory.
 """
 
 import os
-import subprocess
 import sys
 import threading
 
@@ -20,9 +19,8 @@ def schedule_restart(delay: float = 1.0) -> bool:
     """Schedule a process restart after *delay* seconds.
 
     Returns True if a restart was scheduled, False if one is already pending.
-    The restart spawns a new exo process, waits briefly for it to start,
-    then hard-exits the current process. If spawning the replacement fails,
-    the current process is left running.
+    After the delay, replaces the current process via os.execv. If execv
+    fails, the current process is left running and the guard is reset.
     """
     global _restart_scheduled
     with _restart_lock:
@@ -35,19 +33,16 @@ def schedule_restart(delay: float = 1.0) -> bool:
 
         time.sleep(delay)
         try:
-            subprocess.Popen(
-                [sys.executable, *sys.argv],
-                start_new_session=True,
-            )
+            # Replace the current process image. This never returns on
+            # success — the OS releases the port and all GPU memory as
+            # part of the exec, then the new process binds fresh.
+            os.execv(sys.executable, [sys.executable, *sys.argv])
         except Exception as exc:
-            # If we can't spawn the replacement, don't kill the current process
+            # If we can't exec the replacement, keep the current process alive
             global _restart_scheduled
-            logger.error(f"Failed to spawn replacement process: {exc}")
+            logger.error(f"Failed to exec replacement process: {exc}")
             with _restart_lock:
                 _restart_scheduled = False
-            return
-        time.sleep(0.5)
-        os._exit(0)
 
     threading.Thread(target=_do_restart, daemon=True).start()
     return True

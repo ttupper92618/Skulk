@@ -233,6 +233,10 @@ API_TAGS_METADATA = [
         "name": "Images",
         "description": "Image generation, editing, retrieval, and benchmarking endpoints.",
     },
+    {
+        "name": "Admin",
+        "description": "Administrative operations such as node restart.",
+    },
 ]
 
 
@@ -2812,8 +2816,6 @@ class API:
             if command_id in self._embedding_queues:
                 del self._embedding_queues[command_id]
 
-    _restart_pending: bool = False
-
     async def restart_node(self, node_id: NodeId | None = None) -> JSONResponse:
         """Restart the exo process on this or a remote node.
 
@@ -2823,17 +2825,15 @@ class API:
         target = node_id or self.node_id
 
         if target == self.node_id:
-            if self._restart_pending:
+            from exo.utils.restart import schedule_restart
+
+            logger.info("Node restart requested via API — scheduling process replacement")
+            scheduled = schedule_restart()
+            if not scheduled:
                 return JSONResponse(
                     {"status": "restart_already_pending", "node_id": str(self.node_id)},
                     status_code=409,
                 )
-            self._restart_pending = True
-
-            from exo.utils.restart import schedule_restart
-
-            logger.info("Node restart requested via API — spawning replacement and exiting")
-            schedule_restart()
             return JSONResponse({"status": "restarting", "node_id": str(self.node_id)})
 
         # Remote restart — send command via download commands channel
