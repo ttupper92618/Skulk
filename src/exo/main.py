@@ -526,11 +526,7 @@ def main():
     logger_setup(
         EXO_LOG,
         args.verbosity,
-        victorialogs_url=_log_cfg.url if _log_cfg and _log_cfg.enabled else None,
-        victorialogs_flush_interval=_log_cfg.flush_interval_seconds
-        if _log_cfg
-        else 2.0,
-        victorialogs_batch_size=_log_cfg.batch_size if _log_cfg else 64,
+        structured_stdout=_log_cfg.structured_stdout if _log_cfg else False,
     )
     logger.info("Starting EXO")
     logger.info(f"EXO_LIBP2P_NAMESPACE: {os.getenv('EXO_LIBP2P_NAMESPACE')}")
