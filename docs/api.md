@@ -556,6 +556,18 @@ Used by the dashboard to browse a safe subset of the filesystem when selecting c
 
 Returns hostname, preferred IP, and node identity information used by the dashboard.
 
+### Restart a node
+
+**POST** `/admin/restart?node_id=<optional node id>`
+
+Gracefully restart the exo process on this or a remote node. When `node_id` is omitted or matches the local node, restarts directly by spawning a replacement process and exiting. When `node_id` targets a remote node, sends a `RestartNode` command via pub/sub.
+
+- GPU memory is fully released when the old process exits
+- the node rejoins the cluster automatically on startup
+- active inference is interrupted
+
+Returns `{"status": "restarting", "node_id": "..."}` for local restarts, or `{"status": "restart_sent", "node_id": "..."}` for remote restarts.
+
 ## State, Events, and Tracing
 
 ### Cluster state
