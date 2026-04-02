@@ -769,10 +769,10 @@ class API:
             tags=["Admin"],
             summary="Restart a node",
             description=(
-                "Gracefully restart the exo process on this or a remote node. "
+                "Restart the exo process on this or a remote node. "
                 "Pass node_id query param to target a specific node. "
-                "Active inference is interrupted, GPU memory is fully released, "
-                "and the node rejoins the cluster automatically on startup."
+                "Active inference is interrupted, and the process is replaced; "
+                "the node rejoins the cluster automatically on startup."
             ),
         )(self.restart_node)
         self.app.get(

@@ -41,7 +41,7 @@ def schedule_restart(delay: float = 1.0) -> bool:
         except Exception as exc:
             # If we can't exec the replacement, keep the current process alive
             global _restart_scheduled
-            logger.error(f"Failed to exec replacement process: {exc}")
+            logger.exception(f"Failed to exec replacement process: {exc}")
             with _restart_lock:
                 _restart_scheduled = False
 
