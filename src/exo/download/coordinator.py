@@ -171,24 +171,10 @@ class DownloadCoordinator:
 
     async def _restart_node(self) -> None:
         """Restart this node by spawning a replacement process and exiting."""
-        import subprocess
-        import sys
-        import threading
+        from exo.utils.restart import schedule_restart
 
         logger.info("RestartNode command received — spawning replacement and exiting")
-
-        def _do_restart() -> None:
-            import time
-
-            time.sleep(1)  # Allow in-flight operations to settle
-            subprocess.Popen(
-                [sys.executable, *sys.argv],
-                start_new_session=True,
-            )
-            time.sleep(0.5)
-            os._exit(0)  # Hard exit — releases all GPU/Metal memory
-
-        threading.Thread(target=_do_restart, daemon=True).start()
+        schedule_restart()
 
     async def _sync_config(self, config_yaml: str) -> None:
         """Write received config YAML to the local exo.yaml file and

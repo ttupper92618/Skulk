@@ -2812,6 +2812,8 @@ class API:
             if command_id in self._embedding_queues:
                 del self._embedding_queues[command_id]
 
+    _restart_pending: bool = False
+
     async def restart_node(self, node_id: NodeId | None = None) -> JSONResponse:
         """Restart the exo process on this or a remote node.
 
@@ -2821,26 +2823,17 @@ class API:
         target = node_id or self.node_id
 
         if target == self.node_id:
-            import subprocess
-            import sys
-            import threading
+            if self._restart_pending:
+                return JSONResponse(
+                    {"status": "restart_already_pending", "node_id": str(self.node_id)},
+                    status_code=409,
+                )
+            self._restart_pending = True
+
+            from exo.utils.restart import schedule_restart
 
             logger.info("Node restart requested via API — spawning replacement and exiting")
-
-            def _do_restart() -> None:
-                import time
-
-                time.sleep(1)  # Allow the JSON response to flush
-                subprocess.Popen(
-                    [sys.executable, *sys.argv],
-                    start_new_session=True,
-                )
-                time.sleep(0.5)
-                import os
-
-                os._exit(0)  # Hard exit — releases all GPU/Metal memory
-
-            threading.Thread(target=_do_restart, daemon=True).start()
+            schedule_restart()
             return JSONResponse({"status": "restarting", "node_id": str(self.node_id)})
 
         # Remote restart — send command via download commands channel
