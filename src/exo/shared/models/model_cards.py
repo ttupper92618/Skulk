@@ -120,6 +120,11 @@ class ComponentInfo(CamelCaseModel):
 
 
 class VisionCardConfig(CamelCaseModel):
+    """Vision configuration attached to a model card for VLM support.
+
+    Populated from the ``[vision]`` section of a TOML model card or
+    auto-detected from ``config.json`` during card creation."""
+
     image_token_id: int
     model_type: str
     weights_repo: str = ""

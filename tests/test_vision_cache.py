@@ -1,3 +1,8 @@
+"""Tests for KV prefix cache media-region validation.
+
+Ensures the cache correctly detects when image content has changed between
+turns and truncates the prefix match to avoid serving stale vision embeddings."""
+
 from exo.worker.engines.mlx.cache import KVPrefixCache
 from exo.worker.engines.mlx.vision import MediaRegion
 

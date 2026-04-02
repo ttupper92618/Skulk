@@ -1,3 +1,19 @@
+"""Vision encoding pipeline for multimodal (VLM) inference.
+
+Converts images from base64 into vision embeddings that replace image-token
+placeholders in the prompt. The pipeline is:
+
+1. **Decode** base64 images to PIL
+2. **Preprocess** via the model's HuggingFace image processor
+3. **Encode** through the vision tower (+ optional projector) to get features
+4. **Expand** image-token placeholders in the prompt to match feature count
+5. **Embed** by replacing placeholder token embeddings with vision features
+
+Supports models with bundled vision weights (e.g. Qwen3-VL) and models
+with separate vision repos. Results are cached by image content hash to
+avoid re-encoding identical images across turns.
+"""
+
 import base64
 import contextlib
 import hashlib
@@ -55,6 +71,7 @@ def _patch_video_processor() -> None:
 
 
 def decode_base64_image(b64_data: str) -> Image.Image:
+    """Decode a raw base64 string into an RGB PIL Image."""
     raw = base64.b64decode(b64_data)
     img = Image.open(io.BytesIO(raw))
     return img.convert("RGB")
@@ -87,6 +104,8 @@ def build_vision_prompt(
     n_tokens_per_image: list[int],
     image_token: str,
 ) -> str:
+    """Build the full prompt string, expanding each image placeholder to the
+    correct number of image tokens based on the encoder's output size."""
     logger.info(
         f"Vision prompt messages: {[{k: (v[:50] if isinstance(v, str) else v) for k, v in m.items()} for m in chat_template_messages]}"  # type: ignore
     )
@@ -96,6 +115,8 @@ def build_vision_prompt(
         add_generation_prompt=True,
     )
 
+    # Walk the prompt and expand each single image_token placeholder into
+    # N copies where N = the number of vision features for that image.
     image_idx = 0
     result: list[str] = []
     i = 0
@@ -119,6 +140,9 @@ def build_vision_prompt(
 
 @dataclass
 class MediaRegion:
+    """A contiguous span of image-token positions in the prompt, tagged with
+    a content hash so the KV prefix cache can detect when images change."""
+
     content_hash: str
     start_pos: int
     end_pos: int
@@ -126,6 +150,9 @@ class MediaRegion:
 
 @dataclass
 class VisionResult:
+    """Output of the vision pipeline: the expanded prompt, its token IDs,
+    the vision embeddings to splice in, and the media regions for caching."""
+
     prompt: str
     prompt_tokens: mx.array
     embeddings: mx.array
@@ -133,6 +160,10 @@ class VisionResult:
 
 
 class VisionEncoder:
+    """Lazy-loaded vision tower + projector that encodes PIL images into
+    feature tensors. Supports both bundled weights (loaded from the main
+    model repo) and separate vision weight repos."""
+
     def __init__(self, config: VisionCardConfig, model_id: ModelId):
         self._config = config
         self._main_model_path = build_model_path(model_id)
@@ -251,6 +282,8 @@ class VisionEncoder:
                     np_tensor = tensor.float().numpy()  # type: ignore
                     weights[key] = mx.array(np_tensor, dtype=mx.bfloat16)  # type: ignore
 
+        # Partition weights into vision tower vs projector, stripping prefixes
+        # and remapping key names to match mlx_vlm's expected parameter layout.
         vision_weights: dict[str, mx.array] = {}
         projector_weights: dict[str, mx.array] = {}
         for key, val in weights.items():
@@ -327,6 +360,7 @@ class VisionEncoder:
         logger.info(f"Vision encoder loaded: {n_vision / 1e6:.1f}M params")
 
     def encode_images(self, images: list[str]) -> tuple[mx.array, list[int]]:
+        """Encode base64 images into feature tensors and per-image token counts."""
         self.ensure_loaded()
         assert self._vision_tower is not None
         assert self._processor is not None
@@ -386,6 +420,7 @@ class VisionEncoder:
 
 
 def get_inner_model(model: nn.Module) -> Any:  # type: ignore
+    """Traverse the model tree to find the inner transformer with ``embed_tokens``."""
     for candidate in (
         getattr(model, "model", None),
         getattr(getattr(model, "language_model", None), "model", None),
@@ -405,6 +440,10 @@ def create_vision_embeddings(
     image_features: mx.array,
     image_token_id: int,
 ) -> mx.array:
+    """Replace image-token placeholder embeddings with vision features.
+
+    Uses cumsum indexing to map each image-token position to the corresponding
+    row in ``image_features``, then splices them into the text embeddings."""
     inner = get_inner_model(model)  # type: ignore
     embed_tokens = inner.embed_tokens  # type: ignore
 
@@ -422,9 +461,13 @@ def create_vision_embeddings(
             n = min(n_placeholders, image_features.shape[0])
             image_features = image_features[:n]
 
+        # Map each image-token position to its feature row via cumulative sum:
+        # cumsum over the boolean mask gives 1-based indices; subtract 1 for 0-based.
+        # Clip so non-image positions (which get -1) don't go out of bounds.
         image_indices = mx.cumsum(is_image.astype(mx.int32)) - 1
         image_indices = mx.clip(image_indices, 0, image_features.shape[0] - 1)
 
+        # Gather vision features at image positions, keep text embeddings elsewhere
         gathered = image_features[image_indices].astype(input_embeddings.dtype)
         result = mx.where(is_image[:, None], gathered, input_embeddings[0])
         input_embeddings = result[None]
@@ -573,6 +616,9 @@ def prepare_vision(
     tokenizer: TokenizerWrapper,
     model: Model,
 ) -> VisionResult | None:
+    """Top-level entry point: encode images and build the vision-augmented prompt.
+
+    Returns ``None`` if no images are provided or chat template messages are missing."""
     if not images:
         return None
     if chat_template_messages is None:
