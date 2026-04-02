@@ -179,13 +179,13 @@ def load_mlx_items(
         model, _ = load_model(model_path, lazy=True, strict=False)
         # Eval layers one by one for progress reporting
         try:
-            from exo.worker.runner.bootstrap import shutdown_requested
+            import exo.worker.runner.bootstrap as bootstrap
 
             inner = get_inner_model(model)
             layers = get_layers(inner)
             total = len(layers)
             for i, layer in enumerate(layers):
-                if shutdown_requested:
+                if bootstrap.shutdown_requested:
                     logger.info("Aborting model load — shutdown requested")
                     raise InterruptedError("Model load interrupted by shutdown signal")
                 mx.eval(layer)  # type: ignore

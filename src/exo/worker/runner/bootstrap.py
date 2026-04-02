@@ -100,7 +100,9 @@ def entrypoint(
         logger.warning("Runner communication closed unexpectedly")
     except SystemExit:
         # Raised by our signal handler — Metal cleanup already done.
+        # Re-raise so the exit code (128 + signum) is preserved for the supervisor.
         logger.info("Runner exiting after signal cleanup")
+        raise
     except Exception as e:
         logger.opt(exception=e).warning(
             f"Runner {bound_instance.bound_runner_id} crashed with critical exception {e}"
