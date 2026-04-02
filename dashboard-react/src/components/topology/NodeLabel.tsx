@@ -78,7 +78,11 @@ export function NodeLabel({
             <svg
               width="16" height="16" viewBox="0 0 16 16" fill="none"
               style={{ cursor: 'pointer', opacity: confirming ? 1 : 0.5, transition: 'opacity 0.15s' }}
+              role="button"
+              tabIndex={0}
+              aria-label={confirming ? 'Confirm restart of this node' : 'Restart this node'}
               onClick={handleRestartClick}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRestartClick(); } }}
               onMouseEnter={(e) => { (e.currentTarget as SVGElement).style.opacity = '1'; }}
               onMouseLeave={(e) => { (e.currentTarget as SVGElement).style.opacity = confirming ? '1' : '0.5'; }}
             >

@@ -2819,9 +2819,9 @@ class API:
     async def restart_node(self, node_id: NodeId | None = None) -> JSONResponse:
         """Restart the exo process on this or a remote node.
 
-        If node_id is omitted or matches this node, restarts locally by
-        spawning a new process and exiting. Otherwise, sends a RestartNode
-        command via pub/sub to the target node."""
+        If node_id is omitted or matches this node, replaces the current
+        process image via os.execv (in-place restart, same PID). Otherwise,
+        sends a RestartNode command via pub/sub to the target node."""
         target = node_id or self.node_id
 
         if target == self.node_id:

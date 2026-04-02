@@ -170,10 +170,10 @@ class DownloadCoordinator:
             )
 
     async def _restart_node(self) -> None:
-        """Restart this node by spawning a replacement process and exiting."""
+        """Restart this node by replacing the current process image (in-place restart)."""
         from exo.utils.restart import schedule_restart
 
-        logger.info("RestartNode command received — spawning replacement and exiting")
+        logger.info("RestartNode command received — scheduling in-place process restart")
         schedule_restart()
 
     async def _sync_config(self, config_yaml: str) -> None:

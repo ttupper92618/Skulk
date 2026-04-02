@@ -1,8 +1,9 @@
-"""Utility for cleanly restarting the current exo process.
+"""Utility for restarting the current exo process in-place.
 
 Uses os.execv to replace the current process image with a fresh one.
-This guarantees the old process releases its port before the new one
-binds, and the OS reclaims all GPU/Metal memory.
+Because exec replaces the image within the same PID, bound sockets are
+closed (assuming non-inheritable, which is Python's default) and Metal/GPU
+allocations are released by the OS. The new process then binds fresh.
 """
 
 import os
@@ -16,7 +17,7 @@ _restart_lock = threading.Lock()
 
 
 def schedule_restart(delay: float = 1.0) -> bool:
-    """Schedule a process restart after *delay* seconds.
+    """Schedule an in-place process restart after *delay* seconds.
 
     Returns True if a restart was scheduled, False if one is already pending.
     After the delay, replaces the current process via os.execv. If execv
@@ -33,10 +34,10 @@ def schedule_restart(delay: float = 1.0) -> bool:
 
         time.sleep(delay)
         try:
-            # Replace the current process image. This never returns on
-            # success — the OS releases the port and all GPU memory as
-            # part of the exec, then the new process binds fresh.
-            os.execv(sys.executable, [sys.executable, *sys.argv])
+            # Use `python -m exo` so restart works even when invoked via the
+            # `exo` console script (where sys.argv[0] is just "exo", not a
+            # valid Python file path). Preserve all original arguments.
+            os.execv(sys.executable, [sys.executable, "-m", "exo", *sys.argv[1:]])
         except Exception as exc:
             # If we can't exec the replacement, keep the current process alive
             global _restart_scheduled

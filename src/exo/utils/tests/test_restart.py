@@ -35,6 +35,30 @@ def test_schedule_restart_calls_execv() -> None:
         mock_execv.assert_called_once()
 
 
+def test_schedule_restart_uses_python_m_exo() -> None:
+    """Restart argv should use 'python -m exo' so console scripts work."""
+    _reset_restart_state()
+
+    with (
+        patch.object(restart.os, "execv") as mock_execv,
+        patch.object(restart.sys, "executable", "/usr/bin/python3"),
+        patch.object(restart.sys, "argv", ["exo", "--port", "8080"]),
+        patch.object(restart.threading, "Thread") as mock_thread_cls,
+    ):
+        mock_thread = MagicMock()
+        mock_thread_cls.return_value = mock_thread
+
+        restart.schedule_restart(delay=0)
+        target_fn = mock_thread_cls.call_args[1]["target"]
+        with patch("time.sleep"):
+            target_fn()
+
+        mock_execv.assert_called_once_with(
+            "/usr/bin/python3",
+            ["/usr/bin/python3", "-m", "exo", "--port", "8080"],
+        )
+
+
 def test_schedule_restart_idempotent() -> None:
     """Calling schedule_restart twice should return False the second time."""
     _reset_restart_state()
