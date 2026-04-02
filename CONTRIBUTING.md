@@ -203,7 +203,7 @@ Skulk supports shipping structured logs from all cluster nodes to a central [Vic
 ### Browsing Logs
 
 - **VictoriaLogs VMUI**: `http://<logging-server>:9428/select/vmui/`
-- **Grafana**: `http://<logging-server>:3000` (default login: admin/admin)
+- **Grafana**: `http://<logging-server>:3000` (login with the credentials configured in your exo.yaml logging section or set during stack deployment)
 
 ## API Adapters
 
