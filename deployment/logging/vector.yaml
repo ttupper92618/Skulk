@@ -3,11 +3,11 @@
 # Vector reads structured JSON from exo's stdout and ships it to
 # VictoriaLogs.  Run exo piped through Vector:
 #
-#   uv run exo 2>&1 | vector --config deployment/logging/vector.yaml
+#   uv run exo 2>/dev/tty | vector --config deployment/logging/vector.yaml
 #
-# Or more typically, Vector wraps exo:
-#
-#   vector --config deployment/logging/vector.yaml
+# Vector's disk buffer lives under data_dir (defaults to ~/.exo/vector/).
+
+data_dir: ${EXO_VECTOR_DATA_DIR:-~/.exo/vector}
 
 sources:
   exo_stdout:
@@ -32,5 +32,5 @@ sinks:
       timeout_secs: 2
     buffer:
       type: disk
-      max_size: 268435456  # 256 MB — survives VictoriaLogs downtime
+      max_size: 536870912  # 512 MB — survives VictoriaLogs downtime
       when_full: drop_newest
