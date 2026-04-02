@@ -178,7 +178,7 @@ The key pieces:
 - `src/exo/shared/logging.py` — loguru setup with a JSON stdout sink
 - `deployment/logging/vector.yaml` — Vector config (stdin → VictoriaLogs)
 - `deployment/logging/docker-compose.yml` — VictoriaLogs + Grafana stack
-- `exo.yaml` `logging.structured_stdout` — enables the JSON sink
+- `exo.yaml` `logging.enabled` + `logging.ingest_url` — enables the JSON sink (configurable via dashboard Settings, synced to all nodes)
 
 This is opt-in. Without the logging config, exo behaves identically to before.
 

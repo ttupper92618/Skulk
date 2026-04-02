@@ -526,7 +526,7 @@ def main():
     logger_setup(
         EXO_LOG,
         args.verbosity,
-        structured_stdout=_log_cfg.structured_stdout if _log_cfg else False,
+        structured_stdout=bool(_log_cfg and _log_cfg.enabled and _log_cfg.ingest_url),
     )
     logger.info("Starting EXO")
     logger.info(f"EXO_LIBP2P_NAMESPACE: {os.getenv('EXO_LIBP2P_NAMESPACE')}")

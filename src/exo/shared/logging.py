@@ -169,6 +169,28 @@ def logger_setup(
         )
 
 
+def set_structured_stdout(enabled: bool) -> None:
+    """Enable or disable the structured JSON stdout sink at runtime.
+
+    Called when logging config is synced across the cluster.  Safe to call
+    repeatedly — adding when already active or removing when already
+    inactive is a no-op.
+    """
+    global _json_sink_id  # noqa: PLW0603
+    if enabled and _json_sink_id is None:
+        _json_sink_id = logger.add(
+            _json_sink,
+            level="INFO",
+            enqueue=False,
+        )
+        logger.info("Structured JSON stdout sink enabled")
+    elif not enabled and _json_sink_id is not None:
+        with contextlib.suppress(ValueError):
+            logger.remove(_json_sink_id)
+        _json_sink_id = None
+        logger.info("Structured JSON stdout sink disabled")
+
+
 def logger_cleanup():
     """Flush all queues before shutting down so any in-flight logs are written to disk"""
     logger.complete()

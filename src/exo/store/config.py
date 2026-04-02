@@ -201,17 +201,31 @@ class ExoConfig(FrozenModel):
 class LoggingConfig(FrozenModel):
     """Central log aggregation configuration.
 
-    When ``structured_stdout`` is ``True``, exo emits structured JSON on
-    stdout (one object per line) alongside the human-readable stderr
-    output.  A local log shipper such as Vector reads stdout and forwards
-    to VictoriaLogs (or any newline-delimited JSON endpoint).
+    When ``enabled`` is ``True`` and ``ingest_url`` is set, exo emits
+    structured JSON on stdout (one object per line) alongside the
+    human-readable stderr output.  A local log shipper such as Vector
+    reads stdout and forwards to the ingest endpoint.
+
+    Grafana credentials are stored here so the dashboard can link
+    directly to log views.  These are synced to all nodes via gossipsub.
 
     Attributes:
-        structured_stdout: Emit structured JSON on stdout for consumption
-            by Vector or another log shipper.
+        enabled: Master switch for centralized logging.  Nodes only emit
+            structured stdout when this is ``True`` and ``ingest_url`` is
+            set.
+        ingest_url: Full VictoriaLogs (or compatible) ingest URL, e.g.
+            ``http://192.168.0.118:9428/insert/jsonline?_stream_fields=node_id,component&_msg_field=msg&_time_field=ts``.
+        grafana_url: Grafana base URL for dashboard links, e.g.
+            ``http://192.168.0.118:3000``.
+        grafana_user: Grafana admin username.
+        grafana_password: Grafana admin password.
     """
 
-    structured_stdout: bool = False
+    enabled: bool = False
+    ingest_url: str = ""
+    grafana_url: str = ""
+    grafana_user: str = ""
+    grafana_password: str = ""
 
 
 @final

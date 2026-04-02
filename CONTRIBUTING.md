@@ -158,7 +158,7 @@ Skulk uses `exo.yaml` for cluster configuration. Key sections:
 
 - `model_store` — Store host, paths, staging, download settings
 - `inference` — KV cache backend selection (`default`, `optiq`, `turboquant_adaptive`, etc.)
-- `logging` — Centralized log aggregation (`structured_stdout` toggle)
+- `logging` — Centralized log aggregation (ingest URL, Grafana credentials)
 - `hf_token` — HuggingFace API token
 
 Configuration can be edited directly in `exo.yaml` or through the dashboard Settings panel. Changes made via the dashboard are synced to all nodes automatically via gossipsub.
@@ -175,11 +175,16 @@ Skulk supports shipping structured logs from all cluster nodes to a central [Vic
    ```
    This starts VictoriaLogs (port 9428) and Grafana (port 3000).
 
-2. **Enable structured stdout** in `exo.yaml` on each node:
+2. **Configure logging** in the dashboard Settings panel, or in `exo.yaml`:
    ```yaml
    logging:
-     structured_stdout: true
+     enabled: true
+     ingest_url: http://<logging-server>:9428/insert/jsonline?_stream_fields=node_id,component&_msg_field=msg&_time_field=ts
+     grafana_url: http://<logging-server>:3000
+     grafana_user: admin
+     grafana_password: <your-password>
    ```
+   Settings are synced to all nodes automatically via gossipsub.
 
 3. **Install Vector** on each node:
    ```bash

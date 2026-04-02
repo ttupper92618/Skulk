@@ -2511,9 +2511,18 @@ class API:
             raw = yaml.safe_load(f)
         if raw is None:
             raw = {}
-        # Remove sensitive fields — token is managed separately
+        # Remove sensitive fields — tokens/passwords managed separately
         safe_raw = dict(raw) if raw else {}
         has_hf_token = bool(safe_raw.pop("hf_token", None))
+        # Strip grafana_password but preserve the rest of logging config
+        logging_cfg = safe_raw.get("logging")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if isinstance(logging_cfg, dict):
+            safe_raw["logging"] = {
+                k: v for k, v in logging_cfg.items() if k != "grafana_password"
+            }  # pyright: ignore[reportUnknownVariableType]
+            safe_raw["logging"]["has_grafana_password"] = bool(
+                logging_cfg.get("grafana_password")
+            )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         return JSONResponse(
             {
                 "config": safe_raw,
@@ -2531,14 +2540,31 @@ class API:
     async def update_config(self, request: Request) -> JSONResponse:
         body = await request.json()
         config_data = body.get("config", body)
-        # Preserve existing hf_token if not provided in this update
-        # (GET /config strips it for security, so saves won't have it)
-        if "hf_token" not in config_data and self._config_path.exists():
+        # Preserve existing secrets if not provided in this update
+        # (GET /config strips them for security, so saves won't have them)
+        if self._config_path.exists():
             try:
                 with self._config_path.open() as f:
                     existing = yaml.safe_load(f) or {}
-                if "hf_token" in existing:
+                if "hf_token" not in config_data and "hf_token" in existing:
                     config_data["hf_token"] = existing["hf_token"]
+                # Preserve grafana_password if not in this update
+                existing_logging = existing.get("logging", {})  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+                update_logging = config_data.get("logging", {})  # pyright: ignore[reportAny]
+                if isinstance(update_logging, dict) and isinstance(
+                    existing_logging, dict
+                ):
+                    # Strip the has_grafana_password flag from dashboard
+                    update_logging.pop("has_grafana_password", None)  # pyright: ignore[reportUnknownMemberType]
+                    if (
+                        "grafana_password" not in update_logging
+                        and "grafana_password" in existing_logging
+                    ):
+                        update_logging["grafana_password"] = existing_logging[
+                            "grafana_password"
+                        ]
+                    if update_logging:
+                        config_data["logging"] = update_logging
             except Exception:
                 pass
         # Validate by attempting to parse with Pydantic
@@ -2571,6 +2597,15 @@ class API:
         hf_token = config_data.get("hf_token")
         if hf_token and "HF_TOKEN" not in os.environ:
             os.environ["HF_TOKEN"] = str(hf_token)
+        # Apply logging config immediately
+        logging_cfg_update = config_data.get("logging")  # pyright: ignore[reportAny]
+        if isinstance(logging_cfg_update, dict):
+            from exo.shared.logging import set_structured_stdout
+
+            log_on = bool(logging_cfg_update.get("enabled", False)) and bool(
+                logging_cfg_update.get("ingest_url")
+            )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            set_structured_stdout(log_on)
         # model_store changes still require restart; inference-only changes don't
         has_store_changes = "model_store" in config_data
         return JSONResponse(
@@ -2827,7 +2862,9 @@ class API:
         if target == self.node_id:
             from exo.utils.restart import schedule_restart
 
-            logger.info("Node restart requested via API — scheduling process replacement")
+            logger.info(
+                "Node restart requested via API — scheduling process replacement"
+            )
             scheduled = schedule_restart()
             if not scheduled:
                 return JSONResponse(

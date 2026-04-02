@@ -20,7 +20,7 @@ sinks:
     type: http
     inputs:
       - exo_stdout
-    uri: http://192.168.0.118:9428/insert/jsonline?_stream_fields=node_id,component&_msg_field=msg&_time_field=ts
+    uri: ${EXO_LOGGING_INGEST_URL:-http://192.168.0.118:9428/insert/jsonline?_stream_fields=node_id,component&_msg_field=msg&_time_field=ts}
     encoding:
       codec: json
     framing:

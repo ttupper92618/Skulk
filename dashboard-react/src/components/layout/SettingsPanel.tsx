@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
-import { useConfig, type StoreConfig, type FullConfig } from '../../hooks/useConfig';
+import { useConfig, type StoreConfig, type FullConfig, type LoggingConfig } from '../../hooks/useConfig';
 import { Button } from '../common/Button';
 import { Field } from '../common/Field';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -211,6 +211,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [draft, setDraft] = useState<StoreConfig | null>(null);
   const [kvBackend, setKvBackend] = useState('default');
   const [hfToken, setHfToken] = useState('');
+  const [loggingDraft, setLoggingDraft] = useState<LoggingConfig>({
+    enabled: false, ingest_url: '', grafana_url: '', grafana_user: '',
+  });
 
   // Fetch config when panel opens
   useEffect(() => {
@@ -225,6 +228,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDraft(fullConfig?.model_store ? { ...fullConfig.model_store } : null);
     setKvBackend(effective?.kv_cache_backend ?? fullConfig?.inference?.kv_cache_backend ?? 'default');
     setHfToken(fullConfig?.hf_token ?? '');
+    setLoggingDraft({
+      enabled: fullConfig?.logging?.enabled ?? false,
+      ingest_url: fullConfig?.logging?.ingest_url ?? '',
+      grafana_url: fullConfig?.logging?.grafana_url ?? '',
+      grafana_user: fullConfig?.logging?.grafana_user ?? '',
+      has_grafana_password: fullConfig?.logging?.has_grafana_password,
+    });
   }, [fullConfig, effective]);
 
   const update = useCallback((patch: Partial<StoreConfig>) => {
@@ -244,6 +254,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const updated: FullConfig = { ...(fullConfig ?? {}) };
     if (draft) updated.model_store = draft;
     updated.inference = { kv_cache_backend: kvBackend };
+    // Include logging config
+    updated.logging = { ...loggingDraft };
     // Only send hf_token when user entered a new one
     if (hfToken && hfToken !== '') updated.hf_token = hfToken;
     const ok = await saveFullConfig(updated);
@@ -460,6 +472,65 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               {effective?.has_hf_token ? 'Token is configured. ' : ''}
               Synced to all nodes. Env var HF_TOKEN takes precedence if set.
             </HintText>
+          </Fieldset>
+
+          {/* Logging */}
+          <Fieldset>
+            <Legend>Logging</Legend>
+            <Row>
+              <FieldLabel>
+                Enabled
+                <InfoTooltip
+                  filled
+                  content="When enabled, nodes emit structured JSON logs on stdout for collection by Vector. Requires an ingest URL to be set."
+                />
+              </FieldLabel>
+              <Toggle $on={loggingDraft.enabled} onClick={() => setLoggingDraft(prev => ({ ...prev, enabled: !prev.enabled }))} />
+            </Row>
+            {loggingDraft.enabled && (
+              <>
+                <Row>
+                  <FieldLabel>Ingest URL</FieldLabel>
+                  <StyledField
+                    size="sm"
+                    value={loggingDraft.ingest_url}
+                    onChange={(e) => setLoggingDraft(prev => ({ ...prev, ingest_url: (e.target as HTMLInputElement).value }))}
+                    placeholder="http://host:9428/insert/jsonline?_stream_fields=..."
+                  />
+                </Row>
+                <Row>
+                  <FieldLabel>Grafana URL</FieldLabel>
+                  <StyledField
+                    size="sm"
+                    value={loggingDraft.grafana_url}
+                    onChange={(e) => setLoggingDraft(prev => ({ ...prev, grafana_url: (e.target as HTMLInputElement).value }))}
+                    placeholder="http://host:3000"
+                  />
+                </Row>
+                <Row>
+                  <FieldLabel>Grafana user</FieldLabel>
+                  <StyledField
+                    size="sm"
+                    value={loggingDraft.grafana_user}
+                    onChange={(e) => setLoggingDraft(prev => ({ ...prev, grafana_user: (e.target as HTMLInputElement).value }))}
+                    placeholder="admin"
+                  />
+                </Row>
+                <Row>
+                  <FieldLabel>Grafana password</FieldLabel>
+                  <StyledField
+                    size="sm"
+                    type="password"
+                    value={loggingDraft.grafana_password ?? ''}
+                    onChange={(e) => setLoggingDraft(prev => ({ ...prev, grafana_password: (e.target as HTMLInputElement).value }))}
+                    placeholder={loggingDraft.has_grafana_password ? "Password is set — enter new to replace" : "password"}
+                  />
+                </Row>
+                <HintText>
+                  Settings are synced to all nodes. Nodes will start shipping logs when saved.
+                </HintText>
+              </>
+            )}
           </Fieldset>
         </Body>
 

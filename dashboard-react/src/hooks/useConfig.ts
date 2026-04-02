@@ -22,10 +22,22 @@ export interface InferenceConfig {
   kv_cache_backend: string;
 }
 
+/** Logging / observability config synced across the cluster. */
+export interface LoggingConfig {
+  enabled: boolean;
+  ingest_url: string;
+  grafana_url: string;
+  grafana_user: string;
+  grafana_password?: string;
+  /** Set by GET /config — true when a password is saved on disk. */
+  has_grafana_password?: boolean;
+}
+
 /** Full editable config document as read from or written to `/config`. */
 export interface FullConfig {
   model_store?: StoreConfig;
   inference?: InferenceConfig;
+  logging?: LoggingConfig;
   hf_token?: string;
 }
 
