@@ -163,12 +163,21 @@ def logger_setup(
         )
 
     if structured_stdout:
-        global _json_sink_id  # noqa: PLW0603
-        _json_sink_id = logger.add(
-            _json_sink,
-            level="INFO",
-            enqueue=False,
-        )
+        # Only activate if stdout is piped (e.g., to Vector). When stdout
+        # is a terminal there's no consumer, so skip the JSON noise.
+        stdout = sys.__stdout__
+        if stdout is not None and not stdout.isatty():
+            global _json_sink_id  # noqa: PLW0603
+            _json_sink_id = logger.add(
+                _json_sink,
+                level="INFO",
+                enqueue=False,
+            )
+            logger.info("Structured JSON stdout enabled (pipe detected)")
+        else:
+            logger.debug(
+                "Structured stdout configured but stdout is a terminal — skipping JSON sink"
+            )
 
 
 def set_structured_stdout(enabled: bool) -> None:
