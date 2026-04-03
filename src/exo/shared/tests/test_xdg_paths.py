@@ -13,9 +13,10 @@ def _reload_constants_clean(env: dict[str, str], platform: str = "darwin"):
 
     Mocks find_dashboard/find_resources so tests don't need built dashboard
     assets, then reloads constants to pick up the patched env/platform.
-    """
-    import exo.shared.constants as constants
 
+    The patches are only needed during reload — module-level constants are
+    set at import time and persist after the patches are torn down.
+    """
     with ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ, env, clear=True))
         stack.enter_context(mock.patch.object(sys, "platform", platform))
@@ -31,9 +32,12 @@ def _reload_constants_clean(env: dict[str, str], platform: str = "darwin"):
                 return_value=Path("/mock/resources"),
             )
         )
+        # Import inside the patched context so even a first-time import
+        # won't hit the real filesystem for dashboard assets.
+        import exo.shared.constants as constants
+
         importlib.reload(constants)
-        # Yield-like: return constants while patches are active
-        return constants
+    return constants
 
 
 def _safe_env_without(*prefixes: str) -> dict[str, str]:
