@@ -189,6 +189,10 @@ def set_structured_stdout(enabled: bool) -> None:
     """
     global _json_sink_id  # noqa: PLW0603
     if enabled and _json_sink_id is None:
+        # Only activate if stdout is piped to a consumer (e.g., Vector)
+        stdout = sys.__stdout__
+        if stdout is None or stdout.isatty():
+            return
         _json_sink_id = logger.add(
             _json_sink,
             level="INFO",
