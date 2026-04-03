@@ -532,7 +532,7 @@ Use this for workflows such as model optimization or alternate artifact generati
 
 **GET** `/config`
 
-Returns the current cluster config and config path. Sensitive values (`hf_token`, `logging.grafana_password`) are stripped from the response. A `logging.has_grafana_password` boolean indicates whether a password is stored.
+Returns the current cluster config and config path. Sensitive values (`hf_token`) are stripped from the response.
 
 ### Update config
 
@@ -542,8 +542,7 @@ Updates cluster-wide config. Important behavior:
 
 - if you omit `hf_token`, Skulk preserves the existing value
 - if you omit `logging`, Skulk preserves the existing logging config
-- if you include `logging` but omit `grafana_password`, the existing password is preserved
-- secrets (`hf_token`, `grafana_password`) are not broadcast over gossipsub — they stay on the local node's `exo.yaml`
+- `hf_token` is not broadcast over gossipsub — it stays on the local node's `exo.yaml`
 - logging changes (enable/disable) take effect immediately on all nodes
 - inference changes affect future launches
 - model-store location changes generally require restart
