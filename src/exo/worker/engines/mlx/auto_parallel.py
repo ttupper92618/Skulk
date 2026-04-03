@@ -448,10 +448,13 @@ def patch_pipeline_model[T](model: T, group: mx.distributed.Group) -> T:
 
         # Add dependency to last cache entry to ensure distributed ops are evaluated
         if cache is not None:
+            # Extract the raw logits array — vision models (mlx-vlm) may return
+            # a structured output (e.g. LanguageModelOutput) instead of mx.array.
+            logits_array = logits.logits if hasattr(logits, "logits") else logits  # type: ignore
             last = cache[-1]  # type: ignore
             dep_cache = last[0] if hasattr(last, "caches") else last  # type: ignore
             if hasattr(dep_cache, "keys") and dep_cache.keys is not None:  # type: ignore
-                dep_cache.keys = mx.depends(dep_cache.keys, logits)  # type: ignore
+                dep_cache.keys = mx.depends(dep_cache.keys, logits_array)  # type: ignore
 
         return logits
 
