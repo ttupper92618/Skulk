@@ -12,17 +12,17 @@ Skulk includes several opt-in KV cache backends for MLX text generation. These b
 - `turboquant_adaptive`: keeps outer KV layers in FP16 and applies TurboQuant to middle KV layers
 - `optiq`: **[NEW]** rotation-based KV cache via [mlx-optiq](https://mlx-optiq.pages.dev/) — uses randomized orthogonal rotations with Lloyd-Max quantization and rotated-space attention for superior long-context quality
 
-If `EXO_KV_CACHE_BACKEND` is unset, or is set to `default`, Skulk behaves as before.
+If `SKULK_KV_CACHE_BACKEND` is unset, or is set to `default`, Skulk behaves as before.
 
 ## Recommended Settings
 
 ### mlx-optiq (best quality)
 
 ```bash
-EXO_KV_CACHE_BACKEND=optiq \
-EXO_OPTIQ_BITS=4 \
-EXO_OPTIQ_FP16_LAYERS=4 \
-uv run exo
+SKULK_KV_CACHE_BACKEND=optiq \
+SKULK_OPTIQ_BITS=4 \
+SKULK_OPTIQ_FP16_LAYERS=4 \
+uv run skulk
 ```
 
 The optiq backend uses mlx-optiq's rotation-based vector quantization, which eliminates per-key rotation overhead at inference time via rotated-space attention. It keeps the first and last N KV layers in FP16 for adaptive quality.
@@ -30,11 +30,11 @@ The optiq backend uses mlx-optiq's rotation-based vector quantization, which eli
 ### TurboQuant Adaptive (proven stable)
 
 ```bash
-EXO_KV_CACHE_BACKEND=turboquant_adaptive \
-EXO_TQ_K_BITS=3 \
-EXO_TQ_V_BITS=4 \
-EXO_TQ_FP16_LAYERS=4 \
-uv run exo
+SKULK_KV_CACHE_BACKEND=turboquant_adaptive \
+SKULK_TQ_K_BITS=3 \
+SKULK_TQ_V_BITS=4 \
+SKULK_TQ_FP16_LAYERS=4 \
+uv run skulk
 ```
 
 This mode keeps the first and last 4 KV layers in normal FP16-style cache and applies TurboQuant only to the middle KV layers. Proven stable across most models.
@@ -43,38 +43,38 @@ This mode keeps the first and last 4 KV layers in normal FP16-style cache and ap
 
 | Variable | Backends | Default | Description |
 |----------|----------|---------|-------------|
-| `EXO_KV_CACHE_BACKEND` | all | `default` | Backend selection |
-| `EXO_KV_CACHE_BITS` | `mlx_quantized` | *(required)* | Bit width for MLX quantized cache |
-| `EXO_OPTIQ_BITS` | `optiq` | `4` | Bit width for mlx-optiq cache |
-| `EXO_OPTIQ_FP16_LAYERS` | `optiq` | `4` | Edge layers kept in FP16 |
-| `EXO_TQ_K_BITS` | `turboquant`, `turboquant_adaptive` | `3` | Key quantization bits |
-| `EXO_TQ_V_BITS` | `turboquant`, `turboquant_adaptive` | `4` | Value quantization bits |
-| `EXO_TQ_FP16_LAYERS` | `turboquant_adaptive` | `4` | Edge layers kept in FP16 |
+| `SKULK_KV_CACHE_BACKEND` | all | `default` | Backend selection |
+| `SKULK_KV_CACHE_BITS` | `mlx_quantized` | *(required)* | Bit width for MLX quantized cache |
+| `SKULK_OPTIQ_BITS` | `optiq` | `4` | Bit width for mlx-optiq cache |
+| `SKULK_OPTIQ_FP16_LAYERS` | `optiq` | `4` | Edge layers kept in FP16 |
+| `SKULK_TQ_K_BITS` | `turboquant`, `turboquant_adaptive` | `3` | Key quantization bits |
+| `SKULK_TQ_V_BITS` | `turboquant`, `turboquant_adaptive` | `4` | Value quantization bits |
+| `SKULK_TQ_FP16_LAYERS` | `turboquant_adaptive` | `4` | Edge layers kept in FP16 |
 
 ## Invocation Examples
 
 Default behavior:
 
 ```bash
-EXO_KV_CACHE_BACKEND=default uv run exo
+SKULK_KV_CACHE_BACKEND=default uv run skulk
 ```
 
 mlx-optiq (rotation-based):
 
 ```bash
-EXO_KV_CACHE_BACKEND=optiq EXO_OPTIQ_BITS=4 EXO_OPTIQ_FP16_LAYERS=4 uv run exo
+SKULK_KV_CACHE_BACKEND=optiq SKULK_OPTIQ_BITS=4 SKULK_OPTIQ_FP16_LAYERS=4 uv run skulk
 ```
 
 MLX quantized KV cache:
 
 ```bash
-EXO_KV_CACHE_BACKEND=mlx_quantized EXO_KV_CACHE_BITS=4 uv run exo
+SKULK_KV_CACHE_BACKEND=mlx_quantized SKULK_KV_CACHE_BITS=4 uv run skulk
 ```
 
 TurboQuant adaptive:
 
 ```bash
-EXO_KV_CACHE_BACKEND=turboquant_adaptive EXO_TQ_K_BITS=3 EXO_TQ_V_BITS=4 EXO_TQ_FP16_LAYERS=4 uv run exo
+SKULK_KV_CACHE_BACKEND=turboquant_adaptive SKULK_TQ_K_BITS=3 SKULK_TQ_V_BITS=4 SKULK_TQ_FP16_LAYERS=4 uv run skulk
 ```
 
 ## Practical Expectations

@@ -57,3 +57,4 @@ bench/**/*.json
 
 # tmp
 tmp/models
+~/

@@ -19,12 +19,17 @@ from exo.download.impl_shard_downloader import exo_shard_downloader
 from exo.master.main import Master
 from exo.routing.event_router import EventRouter
 from exo.routing.router import Router, get_node_id_keypair
-from exo.shared.constants import EXO_LOG
+from exo.shared.constants import SKULK_LOG
 from exo.shared.election import Election, ElectionResult
 from exo.shared.logging import logger_cleanup, logger_setup
 from exo.shared.types.commands import ForwarderDownloadCommand, SyncConfig
 from exo.shared.types.common import NodeId, SessionId, SystemId
-from exo.store.config import ExoConfig, load_exo_config, resolve_node_staging
+from exo.store.config import (
+    ExoConfig,
+    load_exo_config,
+    resolve_config_path,
+    resolve_node_staging,
+)
 from exo.store.model_store import ModelStore
 from exo.store.model_store_client import ModelStoreClient, ModelStoreDownloader
 from exo.store.model_store_server import ModelStoreServer
@@ -80,12 +85,18 @@ class Node:
         # Load exo.yaml (returns None if absent — zero-config compatibility:
         # when exo.yaml is missing, all store references stay None and exo
         # behaves identically to the upstream default).
-        exo_config = load_exo_config(Path("exo.yaml"))
+        exo_config = load_exo_config()
 
-        # Track whether user provided EXO_KV_CACHE_BACKEND at launch —
+        # Track whether user provided the KV backend env var at launch —
         # if so, config syncs must not overwrite it.
-        _user_set_kv_backend = "EXO_KV_CACHE_BACKEND" in os.environ
-        os.environ["_EXO_KV_BACKEND_USER_SET"] = "1" if _user_set_kv_backend else ""
+        _user_set_kv_backend = (
+            "SKULK_KV_CACHE_BACKEND" in os.environ
+            or "EXO_KV_CACHE_BACKEND" in os.environ
+        )
+        os.environ["_SKULK_KV_BACKEND_USER_SET"] = "1" if _user_set_kv_backend else ""
+        os.environ["_EXO_KV_BACKEND_USER_SET"] = (
+            "1" if _user_set_kv_backend else ""
+        )  # legacy compat
 
         # Apply inference config to env var so runner subprocesses inherit it.
         # Env var takes precedence if user set it at launch.
@@ -94,7 +105,10 @@ class Node:
             and exo_config.inference is not None
             and not _user_set_kv_backend
         ):
-            os.environ["EXO_KV_CACHE_BACKEND"] = exo_config.inference.kv_cache_backend
+            os.environ["SKULK_KV_CACHE_BACKEND"] = exo_config.inference.kv_cache_backend
+            os.environ["EXO_KV_CACHE_BACKEND"] = (
+                exo_config.inference.kv_cache_backend
+            )  # legacy compat
             logger.info(
                 f"Inference config: kv_cache_backend={exo_config.inference.kv_cache_backend}"
             )
@@ -146,17 +160,21 @@ class Node:
             # (spawned via multiprocessing) also pick it up at import time.
             staging_cfg = resolve_node_staging(ms, str(node_id))
             staging_path = str(Path(staging_cfg.node_cache_path).expanduser())
-            existing_path = os.environ.get("EXO_MODELS_PATH", "")
+            existing_path = os.environ.get(
+                "SKULK_MODELS_PATH", os.environ.get("EXO_MODELS_PATH", "")
+            )
             paths = [p for p in existing_path.split(":") if p]
             if staging_path not in paths:
                 paths.append(staging_path)
-            os.environ["EXO_MODELS_PATH"] = ":".join(paths)
+            joined = ":".join(paths)
+            os.environ["SKULK_MODELS_PATH"] = joined
+            os.environ["EXO_MODELS_PATH"] = joined  # legacy compat
             # Also update the in-process constants for the main process
             from exo.shared.constants import add_model_search_path
 
             add_model_search_path(Path(staging_cfg.node_cache_path))
             logger.info(
-                f"ModelStore: added staging path {staging_path} to EXO_MODELS_PATH"
+                f"ModelStore: added staging path {staging_path} to SKULK_MODELS_PATH"
             )
 
             # If this node is the store host, also add the store root to the
@@ -167,10 +185,12 @@ class Node:
                 store_root = str(Path(ms.store_path).expanduser())
                 if store_root not in paths:
                     paths.append(store_root)
-                    os.environ["EXO_MODELS_PATH"] = ":".join(paths)
+                    joined = ":".join(paths)
+                    os.environ["SKULK_MODELS_PATH"] = joined
+                    os.environ["EXO_MODELS_PATH"] = joined  # legacy compat
                     add_model_search_path(Path(ms.store_path))
                     logger.info(
-                        f"ModelStore: store host — added store root {store_root} to EXO_MODELS_PATH (skip staging)"
+                        f"ModelStore: store host — added store root {store_root} to SKULK_MODELS_PATH (skip staging)"
                     )
 
         # Create DownloadCoordinator (unless --no-downloads)
@@ -355,11 +375,11 @@ class Node:
             config_dict, default_flow_style=False, sort_keys=False
         )
 
-        # Also update local exo.yaml with the fixed host
+        # Also update local config file with the fixed host
         try:
-            Path("exo.yaml").write_text(config_yaml)
+            resolve_config_path().write_text(config_yaml)
         except Exception as exc:
-            logger.warning(f"Failed to update local exo.yaml: {exc}")
+            logger.warning(f"Failed to update local config: {exc}")
 
         # Strip secrets before broadcasting over gossipsub
         import copy
@@ -533,18 +553,18 @@ def main():
     # the validation error is logged once the logger is up.
     _log_cfg = None
     try:
-        _early_config = load_exo_config(Path("exo.yaml"))
+        _early_config = load_exo_config()
         _log_cfg = _early_config.logging if _early_config else None
     except Exception:
         pass  # Logged after logger_setup below
 
     logger_setup(
-        EXO_LOG,
+        SKULK_LOG,
         args.verbosity,
         structured_stdout=bool(_log_cfg and _log_cfg.enabled and _log_cfg.ingest_url),
     )
-    logger.info("Starting EXO")
-    logger.info(f"EXO_LIBP2P_NAMESPACE: {os.getenv('EXO_LIBP2P_NAMESPACE')}")
+    logger.info("Starting Skulk")
+    logger.info(f"LIBP2P_NAMESPACE: {os.getenv('EXO_LIBP2P_NAMESPACE')}")
 
     if args.offline:
         logger.info("Running in OFFLINE mode — no internet checks, local models only")
@@ -553,15 +573,18 @@ def main():
         logger.info(f"Bootstrap peers: {args.bootstrap_peers}")
 
     if args.no_batch:
-        os.environ["EXO_NO_BATCH"] = "1"
+        os.environ["SKULK_NO_BATCH"] = "1"
+        os.environ["EXO_NO_BATCH"] = "1"  # legacy compat
         logger.info("Continuous batching disabled (--no-batch)")
 
     # Set FAST_SYNCH override env var for runner subprocesses
     if args.fast_synch is True:
-        os.environ["EXO_FAST_SYNCH"] = "on"
+        os.environ["SKULK_FAST_SYNCH"] = "on"
+        os.environ["EXO_FAST_SYNCH"] = "on"  # legacy compat
         logger.info("FAST_SYNCH forced ON")
     elif args.fast_synch is False:
-        os.environ["EXO_FAST_SYNCH"] = "off"
+        os.environ["SKULK_FAST_SYNCH"] = "off"
+        os.environ["EXO_FAST_SYNCH"] = "off"  # legacy compat
         logger.info("FAST_SYNCH forced OFF")
 
     node = anyio.run(Node.create, args)
@@ -569,11 +592,11 @@ def main():
         anyio.run(node.run)
     except BaseException as exception:
         logger.opt(exception=exception).critical(
-            "EXO terminated due to unhandled exception"
+            "Skulk terminated due to unhandled exception"
         )
         raise
     finally:
-        logger.info("EXO Shutdown complete")
+        logger.info("Skulk shutdown complete")
         logger_cleanup()
 
 

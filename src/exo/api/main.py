@@ -187,6 +187,7 @@ from exo.shared.types.text_generation import TextGenerationTaskParams
 from exo.shared.types.worker.downloads import DownloadCompleted
 from exo.shared.types.worker.instances import Instance, InstanceId, InstanceMeta
 from exo.shared.types.worker.shards import Sharding
+from exo.store.config import resolve_config_path
 from exo.utils.banner import print_startup_banner
 from exo.utils.channels import Receiver, Sender, channel
 from exo.utils.disk_event_log import DiskEventLog
@@ -312,7 +313,7 @@ class API:
         self.port = port
         self._exo_config = exo_config
         self._store_client = store_client
-        self._config_path = Path("exo.yaml")
+        self._config_path = resolve_config_path()
         self._model_optimizer: "ModelOptimizer | None" = None
         # Initialize optimizer if store path is available
         if exo_config and exo_config.model_store and exo_config.model_store.enabled:
@@ -2502,7 +2503,8 @@ class API:
                     "fileExists": False,
                     "effective": {
                         "kv_cache_backend": os.environ.get(
-                            "EXO_KV_CACHE_BACKEND", "default"
+                            "SKULK_KV_CACHE_BACKEND",
+                            os.environ.get("EXO_KV_CACHE_BACKEND", "default"),
                         ),
                     },
                 }
@@ -2574,9 +2576,13 @@ class API:
         if (
             isinstance(inference, dict)
             and "kv_cache_backend" in inference
+            and not os.environ.get("_SKULK_KV_BACKEND_USER_SET")
             and not os.environ.get("_EXO_KV_BACKEND_USER_SET")
         ):
-            os.environ["EXO_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+            os.environ["SKULK_KV_CACHE_BACKEND"] = str(inference["kv_cache_backend"])
+            os.environ["EXO_KV_CACHE_BACKEND"] = str(
+                inference["kv_cache_backend"]
+            )  # legacy compat
         # Apply HF token immediately
         hf_token = config_data.get("hf_token")
         if hf_token and "HF_TOKEN" not in os.environ:

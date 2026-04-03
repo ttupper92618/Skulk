@@ -37,7 +37,8 @@ dependencies = [
 ]
 
 [project.scripts]
-exo = "exo.main:main"
+skulk = "exo.main:main"
+exo = "exo.main:main"  # deprecated alias — use `uv run skulk`
 
 # dependencies only required for development
 [dependency-groups]
@@ -144,6 +145,6 @@ extend-select = ["I", "N", "B", "A", "PIE", "SIM"]
 pythonpath = "."
 asyncio_mode = "auto"
 markers = ["slow: marks tests as slow (deselected by default)"]
-env = ["EXO_TESTS=1"]
+env = ["SKULK_TESTS=1", "EXO_TESTS=1"]
 addopts = "-m 'not slow' --ignore=tests/start_distributed_test.py"
 filterwarnings = ["ignore:builtin type Swig:DeprecationWarning"]

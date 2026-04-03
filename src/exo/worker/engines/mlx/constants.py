@@ -25,13 +25,20 @@ KVCacheBackend = Literal[
 DEFAULT_KV_CACHE_BACKEND: KVCacheBackend = "default"
 KV_CACHE_BACKEND: KVCacheBackend = cast(
     KVCacheBackend,
-    os.environ.get("EXO_KV_CACHE_BACKEND", DEFAULT_KV_CACHE_BACKEND),
+    os.environ.get(
+        "SKULK_KV_CACHE_BACKEND",
+        os.environ.get("EXO_KV_CACHE_BACKEND", DEFAULT_KV_CACHE_BACKEND),
+    ),
 )
 TURBOQUANT_K_BITS: int | None = (
-    int(os.environ["EXO_TQ_K_BITS"]) if "EXO_TQ_K_BITS" in os.environ else None
+    int(os.environ.get("SKULK_TQ_K_BITS", os.environ.get("EXO_TQ_K_BITS", "")))
+    if os.environ.get("SKULK_TQ_K_BITS", os.environ.get("EXO_TQ_K_BITS"))
+    else None
 )
 TURBOQUANT_V_BITS: int | None = (
-    int(os.environ["EXO_TQ_V_BITS"]) if "EXO_TQ_V_BITS" in os.environ else None
+    int(os.environ.get("SKULK_TQ_V_BITS", os.environ.get("EXO_TQ_V_BITS", "")))
+    if os.environ.get("SKULK_TQ_V_BITS", os.environ.get("EXO_TQ_V_BITS"))
+    else None
 )
 TURBOQUANT_FP16_LAYERS: int = int(os.environ.get("EXO_TQ_FP16_LAYERS", "4"))
 DEFAULT_TURBOQUANT_K_BITS: int = 3

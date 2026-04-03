@@ -239,18 +239,31 @@ class InferenceConfig(FrozenModel):
     ] = "default"
 
 
-def load_exo_config(
-    path: Path = Path("exo.yaml"),
-) -> ExoConfig | None:
-    """Load ``exo.yaml`` from *path*.
+def resolve_config_path() -> Path:
+    """Find the config file, preferring ``skulk.yaml`` over legacy ``exo.yaml``."""
+    skulk = Path("skulk.yaml")
+    exo = Path("exo.yaml")
+    if skulk.exists():
+        return skulk
+    if exo.exists():
+        return exo
+    # Neither exists — return the preferred name so callers get a clear path
+    return skulk
 
-    Returns ``None`` if the file does not exist, preserving zero-config
+
+def load_exo_config(
+    path: Path | None = None,
+) -> ExoConfig | None:
+    """Load cluster config from ``skulk.yaml`` (preferred) or ``exo.yaml`` (legacy fallback).
+
+    Returns ``None`` if no config file exists, preserving zero-config
     compatibility: all downstream code must check for ``None`` before using
-    the returned config and fall back to standard EXO behaviour.
+    the returned config and fall back to default behaviour.
 
     Args:
-        path: Path to the config file.  Defaults to ``exo.yaml`` in the
-              current working directory (the project root).
+        path: Explicit path override.  When ``None`` (the default), the
+              function checks for ``skulk.yaml`` first, then ``exo.yaml``
+              in the current working directory.
 
     Returns:
         Parsed :class:`ExoConfig` instance, or ``None`` if the file is absent.
@@ -260,6 +273,8 @@ def load_exo_config(
             invalid configuration.
         :class:`yaml.YAMLError`: If the file exists but is not valid YAML.
     """
+    if path is None:
+        path = resolve_config_path()
     if not path.exists():
         return None
     with path.open() as f:
