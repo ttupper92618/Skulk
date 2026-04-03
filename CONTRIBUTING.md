@@ -31,7 +31,7 @@ To run Skulk from source:
 git clone https://github.com/foxlight-foundation/Skulk.git
 cd Skulk/dashboard-react && npm install && npm run build && cd ..
 uv sync
-uv run exo
+uv run skulk
 ```
 
 ## Project Structure
@@ -99,7 +99,7 @@ For the React dashboard:
 Skulk uses TOML-based model cards to define model metadata and capabilities. Model cards are stored in:
 - `resources/inference_model_cards/` for text generation models
 - `resources/image_model_cards/` for image generation models
-- `~/.exo/custom_model_cards/` for user-added custom models
+- `~/.skulk/custom_model_cards/` for user-added custom models
 
 ### Adding a Model Card
 
@@ -154,14 +154,14 @@ By default, `trust_remote_code` is set to `false` for security. Only enable it i
 
 ## Configuration
 
-Skulk uses `exo.yaml` for cluster configuration. Key sections:
+Skulk uses `skulk.yaml` for cluster configuration. Key sections:
 
 - `model_store` — Store host, paths, staging, download settings
 - `inference` — KV cache backend selection (`default`, `optiq`, `turboquant_adaptive`, etc.)
 - `logging` — Centralized log aggregation (enabled toggle, ingest URL)
 - `hf_token` — HuggingFace API token
 
-Configuration can be edited directly in `exo.yaml` or through the dashboard Settings panel. Changes made via the dashboard are synced to all nodes automatically via gossipsub.
+Configuration can be edited directly in `skulk.yaml` or through the dashboard Settings panel. Changes made via the dashboard are synced to all nodes automatically via gossipsub.
 
 ## Centralized Logging
 
@@ -175,7 +175,7 @@ Skulk supports shipping structured logs from all cluster nodes to a central [Vic
    ```
    This starts VictoriaLogs (port 9428) and Grafana (port 3000).
 
-2. **Configure logging** in the dashboard Settings panel, or in `exo.yaml`:
+2. **Configure logging** in the dashboard Settings panel, or in `skulk.yaml`:
    ```yaml
    logging:
      enabled: true
@@ -191,7 +191,7 @@ Skulk supports shipping structured logs from all cluster nodes to a central [Vic
 
 4. **Run exo piped through Vector**:
    ```bash
-   uv run exo 2>/dev/tty | vector --config deployment/logging/vector.yaml
+   uv run skulk 2>/dev/tty | vector --config deployment/logging/vector.yaml
    ```
    stderr goes to the terminal (human-readable), stdout goes to Vector → VictoriaLogs.
 
@@ -200,7 +200,7 @@ Skulk supports shipping structured logs from all cluster nodes to a central [Vic
 ### Browsing Logs
 
 - **VictoriaLogs VMUI**: `http://<logging-server>:9428/select/vmui/`
-- **Grafana**: `http://<logging-server>:3000` (login with the credentials configured in your exo.yaml logging section or set during stack deployment)
+- **Grafana**: `http://<logging-server>:3000` (login with the credentials configured in your skulk.yaml logging section or set during stack deployment)
 
 ## API Adapters
 

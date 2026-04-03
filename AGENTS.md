@@ -9,14 +9,17 @@ exo is a distributed AI inference system that connects multiple devices into a c
 ## Build & Run Commands
 
 ```bash
-# Build the dashboard (required before running exo)
+# Build the dashboard (required before running skulk)
 cd dashboard-react && npm install && npm run build && cd ..
 
-# Run exo (starts both master and worker with API at http://localhost:52415)
-uv run exo
+# Run skulk (starts both master and worker with API at http://localhost:52415)
+uv run skulk
 
 # Run with verbose logging
-uv run exo -v   # or -vv for more verbose
+uv run skulk -v   # or -vv for more verbose
+
+# Run with centralized logging (requires Vector + VictoriaLogs)
+uv run skulk 2>/dev/tty | vector --config deployment/logging/vector.yaml
 
 # Run tests (excludes slow tests by default)
 uv run pytest
@@ -105,6 +108,12 @@ Rust code in `rust/` provides:
 ### Dashboard
 React + TypeScript + styled-components frontend in `dashboard-react/`. Build output goes to `dashboard-react/dist/` and is served by the API. The legacy Svelte dashboard in `dashboard/` is from upstream exo and is not actively used.
 
+### Logging & Observability
+Centralized logging uses a three-layer stack:
+- **Structured JSON stdout**: When `logging.enabled` is `true` and `logging.ingest_url` is set in `skulk.yaml` (or dashboard Settings), skulk emits one JSON object per line on stdout (alongside human-readable stderr). Settings sync to all nodes via gossipsub. Configured in `src/exo/shared/logging.py`.
+- **Vector**: A local log shipper on each node reads exo's stdout and forwards to VictoriaLogs. Config at `deployment/logging/vector.yaml`.
+- **VictoriaLogs + Grafana**: Central log storage and dashboards on the R720. Stack definition at `deployment/logging/docker-compose.yml`.
+
 ## Mandatory Workflow Rules
 
 These rules apply to every change. No exceptions.
@@ -152,17 +161,17 @@ Only fix comments rated 4 or 5. Do not iterate on minor wording, style, or specu
 
 ## Testing
 
-Tests use pytest-asyncio with `asyncio_mode = "auto"`. Tests are in `tests/` subdirectories alongside the code they test. The `EXO_TESTS=1` env var is set during tests.
+Tests use pytest-asyncio with `asyncio_mode = "auto"`. Tests are in `tests/` subdirectories alongside the code they test. The `SKULK_TESTS=1` env var (fallback: `EXO_TESTS=1`) is set during tests.
 
 ## Dashboard UI Testing & Screenshots
 
 ### Building and Running the Dashboard
 ```bash
-# Build the dashboard (must be done before running exo)
+# Build the dashboard (must be done before running skulk)
 cd dashboard-react && npm install && npm run build && cd ..
 
-# Start exo (serves the dashboard at http://localhost:52415)
-uv run exo &
+# Start skulk (serves the dashboard at http://localhost:52415)
+uv run skulk &
 sleep 8  # Wait for server to start
 ```
 

@@ -391,7 +391,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                         size="sm"
                         value={draft.staging.node_cache_path}
                         onChange={(e) => updateStaging({ node_cache_path: (e.target as HTMLInputElement).value })}
-                        placeholder="~/.exo/staging"
+                        placeholder="~/.skulk/staging"
                       />
                     </Row>
                     <Row>
@@ -437,10 +437,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <option value="optiq">OptiQ (rotation-based)</option>
               <option value="turboquant_adaptive">TurboQuant Adaptive</option>
               <option value="turboquant">TurboQuant</option>
-              <option value="mlx_quantized">MLX Quantized (requires EXO_KV_CACHE_BITS env)</option>
+              <option value="mlx_quantized">MLX Quantized (requires SKULK_KV_CACHE_BITS env)</option>
             </Select>
             {envOverride ? (
-              <HintText>Overridden by EXO_KV_CACHE_BACKEND environment variable. Remove the env var to configure here.</HintText>
+              <HintText>Overridden by SKULK_KV_CACHE_BACKEND environment variable. Remove the env var to configure here.</HintText>
             ) : (
               <HintText>Changes take effect on the next model launch. Models with incompatible architectures (GQA, non-power-of-two head_dim) will automatically fall back to default.</HintText>
             )}

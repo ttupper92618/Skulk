@@ -39,6 +39,7 @@ from exo.shared.types.worker.downloads import (
     DownloadProgress,
 )
 from exo.shared.types.worker.shards import PipelineShardMetadata, ShardMetadata
+from exo.store.config import resolve_config_path
 from exo.utils.channels import Receiver, Sender
 from exo.utils.task_group import TaskGroup
 
@@ -181,7 +182,7 @@ class DownloadCoordinator:
     async def _sync_config(self, config_yaml: str) -> None:
         """Write received config YAML to the local exo.yaml file and
         apply runtime-effective settings (e.g., KV cache backend)."""
-        config_path = Path("exo.yaml")
+        config_path = resolve_config_path()
         try:
             config_path.write_text(config_yaml)
             logger.info(
@@ -195,12 +196,17 @@ class DownloadCoordinator:
                 inference = raw.get("inference")
                 if isinstance(inference, dict) and "kv_cache_backend" in inference:
                     # Don't overwrite if user provided the env var at launch
-                    if not os.environ.get("_EXO_KV_BACKEND_USER_SET"):
-                        os.environ["EXO_KV_CACHE_BACKEND"] = str(
+                    if not os.environ.get(
+                        "_SKULK_KV_BACKEND_USER_SET"
+                    ) and not os.environ.get("_EXO_KV_BACKEND_USER_SET"):
+                        os.environ["SKULK_KV_CACHE_BACKEND"] = str(
                             inference["kv_cache_backend"]
                         )
+                        os.environ["EXO_KV_CACHE_BACKEND"] = str(
+                            inference["kv_cache_backend"]
+                        )  # legacy compat
                         logger.info(
-                            f"DownloadCoordinator: updated EXO_KV_CACHE_BACKEND={inference['kv_cache_backend']}"
+                            f"DownloadCoordinator: updated KV_CACHE_BACKEND={inference['kv_cache_backend']}"
                         )
                     else:
                         logger.info(
@@ -221,7 +227,7 @@ class DownloadCoordinator:
                     log_enabled = bool(logging_cfg.get("enabled", False)) and bool(
                         logging_cfg.get("ingest_url")
                     )
-                    set_structured_stdout(log_enabled)
+                    set_structured_stdout(log_enabled, ingest_url=str(logging_cfg.get("ingest_url", "")))
         except Exception as exc:
             logger.warning(f"DownloadCoordinator: failed to sync exo.yaml: {exc}")
 

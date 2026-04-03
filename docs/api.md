@@ -33,7 +33,7 @@ If you call `/v1/chat/completions` too early, Skulk will usually return somethin
 
 If you want your first successful API call, use this flow:
 
-1. Start Skulk with `uv run exo`.
+1. Start Skulk with `uv run skulk`.
 2. Preview valid placements for a model.
 3. Launch a placement.
 4. Wait for the model to be ready.
@@ -55,7 +55,7 @@ If you want your first successful API call, use this flow:
 ### 1. Start Skulk
 
 ```bash
-uv run exo
+uv run skulk
 ```
 
 ### 2. Preview placements
@@ -542,7 +542,7 @@ Updates cluster-wide config. Important behavior:
 
 - if you omit `hf_token`, Skulk preserves the existing value
 - if you omit `logging`, Skulk preserves the existing logging config
-- `hf_token` is not broadcast over gossipsub — it stays on the local node's `exo.yaml`
+- `hf_token` is not broadcast over gossipsub — it stays on the local node's `skulk.yaml`
 - logging changes (enable/disable) take effect immediately on all nodes
 - inference changes affect future launches
 - model-store location changes generally require restart

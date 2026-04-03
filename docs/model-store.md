@@ -53,7 +53,7 @@ The store server uses port `58080` by default.
 
 This is the simplest path for most people.
 
-1. Start Skulk on all nodes with `uv run exo`.
+1. Start Skulk on all nodes with `uv run skulk`.
 2. Open the dashboard on the node you want to become the store host.
 3. Go to **Settings**.
 4. Enable the store host toggle.
@@ -63,9 +63,9 @@ This is the simplest path for most people.
 
 After that, use the dashboard or API normally. When models are available in the store, worker nodes stage from the store host instead of downloading independently.
 
-## Manual Setup with `exo.yaml`
+## Manual Setup with `skulk.yaml`
 
-If you prefer to configure the model store manually, put the same `exo.yaml` file on each node.
+If you prefer to configure the model store manually, put the same `skulk.yaml` file on each node.
 
 Minimal example:
 
@@ -95,7 +95,7 @@ model_store:
 
   staging:
     enabled: true
-    node_cache_path: ~/.exo/staging
+    node_cache_path: ~/.skulk/staging
     cleanup_on_deactivate: true
 
   node_overrides:
@@ -112,7 +112,7 @@ There are two important paths:
 - `store_path`: the shared source of truth on the store host
 - `node_cache_path`: the local staging area where a node prepares files before loading them
 
-For worker nodes, `node_cache_path` is usually a fast local path such as `~/.exo/staging`.
+For worker nodes, `node_cache_path` is usually a fast local path such as `~/.skulk/staging`.
 
 For the store host, you often point `node_cache_path` at the same directory as `store_path` so the store host can load directly from the shared volume without making another copy.
 
@@ -251,4 +251,4 @@ Check `cleanup_on_deactivate` and any `node_overrides` that may disable cleanup 
 - [README](https://github.com/Foxlight-Foundation/Skulk/blob/main/README.md)
 - [API guide](api.md)
 - [Architecture overview](architecture.md)
-- [exo.yaml example](https://github.com/Foxlight-Foundation/Skulk/blob/main/exo.yaml.example)
+- [skulk.yaml example](https://github.com/Foxlight-Foundation/Skulk/blob/main/skulk.yaml.example)
