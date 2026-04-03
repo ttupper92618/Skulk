@@ -37,7 +37,7 @@ import contextlib
 
 import mlx.core as mx
 import mlx.nn as nn
-from mlx_lm.utils import load_model
+from mlx_lm.utils import load_model as _mlx_lm_load_model
 from pydantic import RootModel
 
 from exo.download.download_utils import build_model_path
@@ -69,6 +69,26 @@ from exo.worker.engines.mlx.auto_parallel import (
 from exo.worker.runner.bootstrap import logger
 
 Group = mx.distributed.Group
+
+
+def load_model(model_path: Path, **kwargs: object) -> tuple[nn.Module, object]:
+    """Load a model, trying mlx-lm first then falling back to mlx-vlm for vision models."""
+    try:
+        return _mlx_lm_load_model(model_path, **kwargs)
+    except ValueError as e:
+        if "not supported" not in str(e):
+            raise
+        # Model type not in mlx-lm (e.g. gemma4 vision model) — try mlx-vlm
+        logger.info(f"Model type not supported by mlx-lm, trying mlx-vlm: {e}")
+        try:
+            from mlx_vlm.utils import load_model as _mlx_vlm_load_model
+
+            model = _mlx_vlm_load_model(model_path, **kwargs)
+            return model, None
+        except ImportError:
+            raise ValueError(
+                f"{e}. Install mlx-vlm for vision model support: pip install -U mlx-vlm"
+            ) from e
 
 
 def get_weights_size(model_shard_meta: ShardMetadata) -> Memory:

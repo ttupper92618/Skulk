@@ -53,12 +53,21 @@ class InterceptLogger(HypercornLogger):
         self.error_logger.handlers = [_InterceptHandler()]
 
 
+# HTTP access log patterns that are too noisy at INFO — demote to DEBUG
+_NOISY_PATTERNS = ("GET /downloads", "GET /health")
+
+
 class _InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         try:
             level = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
+
+        # Demote noisy polling endpoints to DEBUG
+        msg = record.getMessage()
+        if any(p in msg for p in _NOISY_PATTERNS):
+            level = "DEBUG"
 
         logger.opt(depth=3, exception=record.exc_info).log(level, record.getMessage())
 
