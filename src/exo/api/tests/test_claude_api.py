@@ -14,8 +14,8 @@ from exo.api.types.claude_api import (
     ClaudeImageSource,
     ClaudeMessage,
     ClaudeMessagesRequest,
-    ClaudeToolResultBlock,
     ClaudeTextBlock,
+    ClaudeToolResultBlock,
 )
 from exo.shared.types.common import ModelId
 
