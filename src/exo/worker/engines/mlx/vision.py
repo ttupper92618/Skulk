@@ -504,19 +504,29 @@ class VisionEncoder:
         return pixel_values, None, n_tokens_per_image
 
     def _get_soft_tokens_per_image(self) -> int:
-        """Determine the number of soft tokens per image from model config."""
+        """Determine the number of soft tokens per image from model config.
+
+        Caches the result to avoid re-reading config.json on every call."""
+        cached = getattr(self, "_soft_tokens_cache", None)
+        if cached is not None:
+            return int(cached)
+
+        result = 256  # sensible default for SiglipImageProcessor-based models
         config = self._load_config_json()
         if config:
             # Top-level vision_soft_tokens_per_image (gemma3n, gemma4).
             vst = config.get("vision_soft_tokens_per_image")
             if vst is not None:
-                return int(vst)  # pyright: ignore[reportAny]
-            # VisionConfig.default_output_length (gemma4).
-            vc: dict[str, Any] = config.get("vision_config", {})  # pyright: ignore[reportAny]
-            dol = vc.get("default_output_length")
-            if dol is not None:
-                return int(dol)  # pyright: ignore[reportAny]
-        return 256  # sensible default for SiglipImageProcessor-based models
+                result = int(vst)  # pyright: ignore[reportAny]
+            else:
+                # VisionConfig.default_output_length (gemma4).
+                vc: dict[str, Any] = config.get("vision_config", {})  # pyright: ignore[reportAny]
+                dol = vc.get("default_output_length")
+                if dol is not None:
+                    result = int(dol)  # pyright: ignore[reportAny]
+
+        self._soft_tokens_cache = result
+        return result
 
     def _run_vision_tower(
         self, pixel_values: mx.array | list[mx.array], grid_thw: mx.array | None
