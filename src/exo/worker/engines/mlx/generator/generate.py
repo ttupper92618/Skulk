@@ -1,8 +1,10 @@
 import contextlib
 import functools
 import math
+import os
 import time
 from copy import deepcopy
+from importlib import metadata
 from typing import Callable, Generator, cast, get_args
 
 import mlx.core as mx
@@ -70,6 +72,46 @@ from exo.worker.runner.bootstrap import logger
 generation_stream = mx.new_stream(mx.default_device())
 
 _MIN_PREFIX_HIT_RATIO_TO_UPDATE = 0.5
+
+
+def _parse_version_triplet(version_str: str) -> tuple[int, int, int]:
+    """Parse a package version into a coarse comparable triplet."""
+    parts: list[int] = []
+    for piece in version_str.split("."):
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+        if len(parts) == 3:
+            break
+    while len(parts) < 3:
+        parts.append(0)
+    return parts[0], parts[1], parts[2]
+
+
+def _should_use_native_vision_reference_path() -> bool:
+    """Return whether native vision should force MLX-VLM's reference decode path.
+
+    The reference path was needed to work around older upstream MLX Gemma 4
+    vision behavior, but it bypasses Skulk's faster pipeline-aware generation
+    path. Once the runtime is on the fixed upstream stack, we prefer the legacy
+    Skulk path again for throughput.
+    """
+    override = os.environ.get("EXO_NATIVE_VISION_REFERENCE_PATH")
+    if override is not None:
+        normalized = override.strip().lower()
+        return normalized not in {"0", "false", "no", "off"}
+
+    try:
+        mlx_version = _parse_version_triplet(metadata.version("mlx"))
+        mlx_vlm_version = _parse_version_triplet(metadata.version("mlx-vlm"))
+    except metadata.PackageNotFoundError:
+        # Be conservative if metadata is unavailable.
+        return True
+
+    return not (
+        mlx_version >= (0, 31, 1) and mlx_vlm_version >= (0, 4, 4)
+    )
 
 
 @contextlib.contextmanager
@@ -767,24 +809,30 @@ def mlx_generate(
     max_stop_len = max((len(s) for s in stop_sequences), default=0)
 
     if vision is not None and vision.pixel_values is not None:
-        if kv_prefix_cache is not None:
-            logger.info(
-                "Disabling KV prefix cache for native vision generation to follow "
-                "the mlx-vlm reference execution path"
+        if _should_use_native_vision_reference_path():
+            if kv_prefix_cache is not None:
+                logger.info(
+                    "Disabling KV prefix cache for native vision generation to follow "
+                    "the mlx-vlm reference execution path"
+                )
+            yield from _mlx_generate_native_vision(
+                model=model,
+                tokenizer=tokenizer,
+                task=task,
+                all_prompt_tokens=all_prompt_tokens,
+                vision=vision,
+                sampler=sampler,
+                logits_processors=logits_processors,
+                on_prefill_progress=on_prefill_progress,
+                on_generation_token=on_generation_token,
+                group=group,
             )
-        yield from _mlx_generate_native_vision(
-            model=model,
-            tokenizer=tokenizer,
-            task=task,
-            all_prompt_tokens=all_prompt_tokens,
-            vision=vision,
-            sampler=sampler,
-            logits_processors=logits_processors,
-            on_prefill_progress=on_prefill_progress,
-            on_generation_token=on_generation_token,
-            group=group,
+            return
+
+        logger.info(
+            "Using pipeline-aware native vision generation path on fixed "
+            "mlx/mlx-vlm stack"
         )
-        return
 
     if vision is not None and vision.pixel_values is not None:
         if hasattr(model, "set_pixel_values"):

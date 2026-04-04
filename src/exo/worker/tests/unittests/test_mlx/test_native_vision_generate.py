@@ -9,6 +9,7 @@ from exo.shared.types.text_generation import InputMessage, TextGenerationTaskPar
 from exo.shared.types.worker.runner_response import GenerationResponse
 from exo.worker.engines.mlx.generator.generate import (
     _mlx_generate_native_vision,
+    _should_use_native_vision_reference_path,
     mlx_generate,
 )
 from exo.worker.engines.mlx.vision import VisionResult
@@ -41,6 +42,8 @@ class _FakeTokenizer:
         self.detokenizer = _FakeDetokenizer()
         self.eos_token_ids = [999]
         self.has_thinking = False
+        self.think_start = None
+        self.think_end = None
 
     def decode(self, token_ids: list[int]) -> str:
         return "".join(str(token_id) for token_id in token_ids)
@@ -132,6 +135,10 @@ def test_mlx_generate_routes_native_vision_through_reference_path(monkeypatch) -
         _fake_prepare_vision,
     )
     monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate._should_use_native_vision_reference_path",
+        lambda: True,
+    )
+    monkeypatch.setattr(
         "exo.worker.engines.mlx.generator.generate._mlx_generate_native_vision",
         _fake_native_generate,
     )
@@ -174,3 +181,104 @@ def test_mlx_generate_routes_native_vision_through_reference_path(monkeypatch) -
     )
 
     assert [response.text for response in responses] == ["native"]
+
+
+def test_mlx_generate_uses_pipeline_aware_path_on_fixed_stack(monkeypatch) -> None:
+    """Fixed upstream stacks should use the faster legacy generation path."""
+
+    vision = VisionResult(
+        prompt="ignored",
+        prompt_tokens=mx.array([1, 2, 3]),
+        embeddings=mx.zeros((1, 0, 1)),
+        media_regions=[],
+        pixel_values=mx.array([1.0]),
+    )
+
+    class _FakeModel:
+        def __init__(self) -> None:
+            self.pixel_values: mx.array | None = None
+
+        def set_pixel_values(self, pixel_values: mx.array | None) -> None:
+            self.pixel_values = pixel_values
+
+    def _fake_prepare_vision(**_kwargs: object) -> VisionResult:
+        return vision
+
+    def _fake_prefill(*_args: object, **_kwargs: object):
+        return 0.0, 2, []
+
+    def _fake_stream_generate(*_args: object, **_kwargs: object):
+        yield GenerationResponse(text="legacy", token=101, usage=None)
+
+    def _fail_native_generate(**_kwargs: object):
+        raise AssertionError("fixed stacks should not force reference native vision")
+
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.prepare_vision",
+        _fake_prepare_vision,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate._should_use_native_vision_reference_path",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate._mlx_generate_native_vision",
+        _fail_native_generate,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.prefill",
+        _fake_prefill,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.stream_generate",
+        _fake_stream_generate,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.make_kv_cache",
+        lambda **_kwargs: [],
+    )
+
+    task = TextGenerationTaskParams(
+        model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+        input=[InputMessage(role="user", content="what is this?")],
+        chat_template_messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "what is this?"},
+                ],
+            }
+        ],
+        images=["ignored"],
+        max_output_tokens=8,
+        temperature=0.0,
+    )
+
+    model = _FakeModel()
+    responses = list(
+        mlx_generate(
+            model=model,  # type: ignore[arg-type]
+            tokenizer=_FakeTokenizer(),  # type: ignore[arg-type]
+            task=task,
+            prompt="<bos>",
+            kv_prefix_cache=None,
+            group=None,
+            vision_processor=object(),  # type: ignore[arg-type]
+        )
+    )
+
+    assert [response.text for response in responses] == ["legacy"]
+    assert model.pixel_values is None
+
+
+def test_native_vision_reference_path_version_gate(monkeypatch) -> None:
+    """Recent upstream MLX versions should disable the slower reference path."""
+
+    monkeypatch.delenv("EXO_NATIVE_VISION_REFERENCE_PATH", raising=False)
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.metadata.version",
+        lambda package: {"mlx": "0.31.1", "mlx-vlm": "0.4.4"}[package],
+    )
+
+    assert _should_use_native_vision_reference_path() is False
