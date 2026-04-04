@@ -475,6 +475,7 @@ class VisionEncoder:
         self, pil_images: list[Image.Image]
     ) -> tuple[mx.array | list[mx.array], mx.array | None, list[int]]:
         """Public interface to image preprocessing (pixel_values + token counts)."""
+        self.ensure_loaded()
         return self._preprocess_images(pil_images)
 
     def encode_images(self, images: list[str]) -> tuple[mx.array, list[int]]:
