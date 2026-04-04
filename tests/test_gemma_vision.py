@@ -162,11 +162,6 @@ class TestLoadProjectorWeights:
         ref = nn.Linear(64, 32, bias=False)
         nn.quantize(ref, bits=4, group_size=64)
         mx.eval(ref.parameters())
-        quantized_weights = {
-            k: v for k, v in ref.parameters().items() for k, v in (
-                [(k, v)] if not isinstance(v, dict) else list(v.items())
-            )
-        }
         # Flatten nested dict from ref.parameters()
         flat: dict[str, mx.array] = {}
         for k, v in ref.parameters().items():
