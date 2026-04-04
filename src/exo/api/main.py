@@ -2091,6 +2091,9 @@ class API:
         # Thinking capability
         if "thinking" in card.capabilities:
             tags.append("thinking")
+        # Vision-capable models
+        if "vision" in card.capabilities:
+            tags.append("vision")
         # Tensor parallel support
         if card.supports_tensor:
             tags.append("tensor")
