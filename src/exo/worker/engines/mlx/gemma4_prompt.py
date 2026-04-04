@@ -3,11 +3,12 @@
 This module mirrors the Gemma 4 chat structure used by the reference
 Hugging Face template and Ollama's dedicated Gemma 4 renderer. We use it
 to avoid relying on generic tokenizer chat templating for Gemma 4 because
-that path can prepend a thinking channel even when thinking was not
-requested, which changes the multimodal prompt the model sees.
+we need exact control over the multimodal prompt the model sees.
 """
 
 from typing import Any
+
+_GEMMA4_EMPTY_THOUGHT_CHANNEL = "<|channel>thought\n<channel|>"
 
 
 def strip_gemma4_thinking(text: str) -> str:
@@ -91,5 +92,10 @@ def render_gemma4_prompt(
 
     if add_generation_prompt:
         prompt_parts.append("<|turn>model\n")
+        if not enable_thinking:
+            # Match the shipped Gemma 4 chat template exactly. The model's own
+            # tokenizer appends an empty thought channel before assistant
+            # generation, and our output parser now understands that format.
+            prompt_parts.append(_GEMMA4_EMPTY_THOUGHT_CHANNEL)
 
     return "".join(prompt_parts)

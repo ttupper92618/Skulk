@@ -165,7 +165,7 @@ class TestGemma4ReferencePromptRenderer:
 
         assert (
             prompt
-            == "<bos><|turn>user\n\n\n<|image|>\n\nwhat do you see?<turn|>\n<|turn>model\n"
+            == "<bos><|turn>user\n\n\n<|image|>\n\nwhat do you see?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
         )
 
     def test_thinking_requires_explicit_enable(self):
@@ -204,8 +204,7 @@ class TestGemma4ReferencePromptRenderer:
 
         prompt = apply_chat_template(_Tokenizer(), task)  # type: ignore[arg-type]
 
-        assert "<|channel>thought" not in prompt
-        assert prompt.endswith("<|turn>model\n")
+        assert prompt.endswith("<|turn>model\n<|channel>thought\n<channel|>")
 
     def test_build_vision_prompt_uses_reference_renderer_for_gemma4(self):
         from exo.worker.engines.mlx.vision import build_vision_prompt
@@ -238,7 +237,7 @@ class TestGemma4ReferencePromptRenderer:
 
         assert (
             prompt
-            == "<bos><|turn>user\n\n\n<|image><|image|><|image|><|image|><image|>\n\nwhat do you see?<turn|>\n<|turn>model\n"
+            == "<bos><|turn>user\n\n\n<|image><|image|><|image|><|image|><image|>\n\nwhat do you see?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
         )
 
     def test_process_native_forwards_gemma4_model_type_to_prompt_builder(
