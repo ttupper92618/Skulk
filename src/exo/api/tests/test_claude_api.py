@@ -14,6 +14,7 @@ from exo.api.types.claude_api import (
     ClaudeImageSource,
     ClaudeMessage,
     ClaudeMessagesRequest,
+    ClaudeToolResultBlock,
     ClaudeTextBlock,
 )
 from exo.shared.types.common import ModelId
@@ -196,6 +197,43 @@ class TestClaudeRequestToInternal:
                     {"type": "image"},
                     {"type": "text", "text": "describe"},
                 ],
+            }
+        ]
+
+    @pytest.mark.anyio
+    async def test_tool_result_images_are_not_collected_without_placeholders(self):
+        request = ClaudeMessagesRequest(
+            model=ModelId("claude-3-opus"),
+            max_tokens=100,
+            messages=[
+                ClaudeMessage(
+                    role="user",
+                    content=[
+                        ClaudeToolResultBlock(
+                            tool_use_id="tool_123",
+                            content=[
+                                ClaudeImageBlock(
+                                    source=ClaudeImageSource(
+                                        type="base64",
+                                        data="BASE64DATA",
+                                    )
+                                ),
+                                ClaudeTextBlock(text="tool output"),
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+
+        params = await claude_request_to_text_generation(request)
+
+        assert params.images == []
+        assert params.chat_template_messages == [
+            {
+                "role": "tool",
+                "tool_call_id": "tool_123",
+                "content": "tool output",
             }
         ]
 
