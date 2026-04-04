@@ -608,7 +608,7 @@ requires-dist = [
     { name = "mlx", extras = ["cpu"], marker = "sys_platform == 'linux'", specifier = "==0.30.6" },
     { name = "mlx-lm", git = "https://github.com/rltakashige/mlx-lm?branch=leo%2Ffix-arrayscache-leak" },
     { name = "mlx-optiq", extras = ["convert"], marker = "sys_platform == 'darwin'" },
-    { name = "mlx-vlm", specifier = ">=0.3.11" },
+    { name = "mlx-vlm", specifier = ">=0.4.3" },
     { name = "msgspec", specifier = ">=0.19.0" },
     { name = "openai-harmony", specifier = ">=0.0.8" },
     { name = "psutil", specifier = ">=7.0.0" },
@@ -1688,7 +1688,7 @@ convert = [
 
 [[package]]
 name = "mlx-vlm"
-version = "0.4.1"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "datasets", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1704,9 +1704,9 @@ dependencies = [
     { name = "transformers", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "uvicorn", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/57/8f/31204f1a8c7404e523a5578949ea668e668e10dd67a0f63336f261014c0f/mlx_vlm-0.4.1.tar.gz", hash = "sha256:4e2d8a232715dbca72d346f43cf54d5738452848855792ffb1b285228ae7c7bd", size = 621840, upload-time = "2026-03-21T14:26:04.586Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/d2/cc80916001d73d7f877360054c2fcb5ca54a07fcfee8a325e6d121b3d98b/mlx_vlm-0.4.3.tar.gz", hash = "sha256:70c020edbc629ec6091f530a93d913b328b2c74f83da661322ba6e1bcbdf5035", size = 816749, upload-time = "2026-04-02T21:15:14.157Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/78/856f44c6bdd8791427fa59a093a1d00c91cdbe16238506602fc3968017bb/mlx_vlm-0.4.1-py3-none-any.whl", hash = "sha256:89feca2e8be31609770c0e8a6d88fa21d00ee25bd3d56b4aafce59d35dd63b71", size = 768806, upload-time = "2026-03-21T14:26:03.129Z" },
+    { url = "https://files.pythonhosted.org/packages/58/49/1815a7a74070e923140a065c81de5737e007f525fcd9f8d922a3584e301e/mlx_vlm-0.4.3-py3-none-any.whl", hash = "sha256:225d1b6b5467c15cce92e681f54c3f3c58bbcc180fc0aeefa35386f2db56bb08", size = 995733, upload-time = "2026-04-02T21:15:12.573Z" },
 ]
 
 [[package]]
