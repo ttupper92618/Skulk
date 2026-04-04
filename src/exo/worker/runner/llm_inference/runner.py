@@ -130,7 +130,7 @@ class Runner:
             f"input_messages={len(params.input)}, "
             f"chat_template_messages={len(params.chat_template_messages or [])}, "
             f"images={len(params.images)}, "
-            f"image_hashes={sorted(params.image_hashes.keys())}, "
+            f"cached_image_indices={sorted(params.image_hashes.keys())}, "
             f"total_input_chunks={params.total_input_chunks}, "
             f"image_count={params.image_count}, "
             f"stream={params.stream}, "

@@ -12,6 +12,10 @@ import mlx.nn as nn
 from PIL import Image
 
 from exo.shared.models.model_cards import VisionCardConfig
+from exo.shared.types.common import ModelId
+from exo.shared.types.text_generation import InputMessage, TextGenerationTaskParams
+from exo.worker.engines.mlx.gemma4_prompt import render_gemma4_prompt
+from exo.worker.engines.mlx.utils_mlx import apply_chat_template
 from exo.worker.engines.mlx.vision import _find_media_regions, _format_vlm_messages
 
 
@@ -141,6 +145,101 @@ class TestModelTypePriority:
         result = ConfigData.model_validate(data, context={"model_id": "test/model"})
         assert result.vision is not None
         assert result.vision.model_type == "qwen3_vl"
+
+
+class TestGemma4ReferencePromptRenderer:
+    """Gemma 4 prompts should match the dedicated reference structure."""
+
+    def test_multimodal_prompt_matches_reference_shape(self):
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "what do you see?"},
+                ],
+            }
+        ]
+
+        prompt = render_gemma4_prompt(messages, add_generation_prompt=True)
+
+        assert (
+            prompt
+            == "<bos><|turn>user\n\n\n<|image|>\n\nwhat do you see?<turn|>\n<|turn>model\n"
+        )
+
+    def test_thinking_requires_explicit_enable(self):
+        messages = [{"role": "user", "content": "Hi"}]
+
+        prompt = render_gemma4_prompt(
+            messages,
+            add_generation_prompt=True,
+            enable_thinking=True,
+        )
+
+        assert (
+            prompt
+            == "<bos><|turn>system\n<|think|><turn|>\n<|turn>user\nHi<turn|>\n<|turn>model\n"
+        )
+
+    def test_apply_chat_template_uses_reference_renderer_for_plain_gemma4(self):
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 should not use generic chat templating here")
+
+        task = TextGenerationTaskParams(
+            model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+            input=[InputMessage(role="user", content="what do you see?")],
+            chat_template_messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "what do you see?"},
+                    ],
+                }
+            ],
+            images=[_fake_b64_image()],
+        )
+
+        prompt = apply_chat_template(_Tokenizer(), task)  # type: ignore[arg-type]
+
+        assert "<|channel>thought" not in prompt
+        assert prompt.endswith("<|turn>model\n")
+
+    def test_build_vision_prompt_uses_reference_renderer_for_gemma4(self):
+        from exo.worker.engines.mlx.vision import build_vision_prompt
+
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 vision should not use generic chat templating here")
+
+            def decode(self, token_ids):
+                mapping = {10: "<|image>", 11: "<image|>"}
+                return "".join(mapping[token_id] for token_id in token_ids)
+
+        prompt = build_vision_prompt(
+            tokenizer=_Tokenizer(),  # type: ignore[arg-type]
+            chat_template_messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "what do you see?"},
+                    ],
+                }
+            ],
+            n_tokens_per_image=[3],
+            image_token="<|image|>",
+            model_type="gemma4",
+            boi_token_id=10,
+            eoi_token_id=11,
+        )
+
+        assert (
+            prompt
+            == "<bos><|turn>user\n\n\n<|image><|image|><|image|><|image|><image|>\n\nwhat do you see?<turn|>\n<|turn>model\n"
+        )
 
 
 class TestLoadProjectorWeights:

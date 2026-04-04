@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -33,7 +34,6 @@ try:
     from mlx_lm.tokenizer_utils import load_tokenizer
 except ImportError:
     from mlx_lm.tokenizer_utils import load as load_tokenizer
-import contextlib
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -66,9 +66,25 @@ from exo.worker.engines.mlx.auto_parallel import (
     pipeline_auto_parallel,
     tensor_auto_parallel,
 )
+from exo.worker.engines.mlx.gemma4_prompt import render_gemma4_prompt
 from exo.worker.runner.bootstrap import logger
 
 Group = mx.distributed.Group
+
+
+def _uses_gemma4_reference_prompt(task_params: TextGenerationTaskParams) -> bool:
+    """Return whether this request should use the dedicated Gemma 4 renderer."""
+    model_name = str(task_params.model).lower()
+    if "gemma-4" not in model_name and "gemma4" not in model_name:
+        return False
+
+    if task_params.tools:
+        # Tool-enabled Gemma 4 requests still use the tokenizer template until
+        # we port the full declaration/call grammar from the reference
+        # renderer. The current bug report is for plain multimodal prompting.
+        return False
+
+    return task_params.chat_template_messages is not None
 
 
 def _gemma4_output_length_for_pixel_values(
@@ -827,6 +843,15 @@ def apply_chat_template(
         )
         if partial_assistant_content:
             prompt += partial_assistant_content
+        logger.info(prompt)
+        return prompt
+
+    if _uses_gemma4_reference_prompt(task_params):
+        prompt = render_gemma4_prompt(
+            formatted_messages,
+            add_generation_prompt=True,
+            enable_thinking=task_params.enable_thinking,
+        )
         logger.info(prompt)
         return prompt
 

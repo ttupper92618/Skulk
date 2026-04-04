@@ -44,6 +44,7 @@ from exo.shared.models.model_cards import VisionCardConfig
 from exo.shared.types.common import ModelId
 from exo.shared.types.mlx import Model
 from exo.worker.engines.mlx.cache import encode_prompt
+from exo.worker.engines.mlx.gemma4_prompt import render_gemma4_prompt
 from exo.worker.engines.mlx.utils_mlx import fix_unmatched_think_end_tokens
 from exo.worker.runner.bootstrap import logger
 
@@ -257,6 +258,7 @@ def build_vision_prompt(
     chat_template_messages: list[dict[str, Any]],
     n_tokens_per_image: list[int],
     image_token: str,
+    model_type: str | None = None,
     boi_token_id: int | None = None,
     eoi_token_id: int | None = None,
 ) -> str:
@@ -269,11 +271,18 @@ def build_vision_prompt(
     logger.info(
         f"Vision prompt messages: {[{k: (v[:50] if isinstance(v, str) else v) for k, v in m.items()} for m in chat_template_messages]}"  # type: ignore
     )
-    prompt: str = tokenizer.apply_chat_template(
-        chat_template_messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    uses_gemma4_reference_prompt = model_type == "gemma4"
+    if uses_gemma4_reference_prompt:
+        prompt = render_gemma4_prompt(
+            chat_template_messages,
+            add_generation_prompt=True,
+        )
+    else:
+        prompt = tokenizer.apply_chat_template(
+            chat_template_messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
     # Decode BOI/EOI token IDs to their string form so we can insert them
     # into the prompt text before tokenization.
@@ -1036,6 +1045,7 @@ class VisionProcessor:
             formatted_messages,
             n_tokens_per_image,
             image_token,
+            model_type=self.vision_config.model_type,
             boi_token_id=self.vision_config.boi_token_id,
             eoi_token_id=self.vision_config.eoi_token_id,
         )
