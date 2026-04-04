@@ -241,10 +241,16 @@ class TestGemma4ReferencePromptRenderer:
         )
 
     def test_process_native_forwards_gemma4_model_type_to_prompt_builder(
-        self, monkeypatch
+        self, monkeypatch, tmp_path
     ):
         from exo.shared.models.model_cards import VisionCardConfig
         from exo.worker.engines.mlx.vision import VisionProcessor
+
+        (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision.build_model_path",
+            lambda _model_id: tmp_path,
+        )
 
         config = VisionCardConfig(
             image_token_id=258880,
