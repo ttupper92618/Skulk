@@ -7,6 +7,7 @@ import base64
 import io
 
 import mlx.core as mx
+import mlx.nn as nn
 from PIL import Image
 
 from exo.shared.models.model_cards import VisionCardConfig
@@ -139,3 +140,45 @@ class TestModelTypePriority:
         result = ConfigData.model_validate(data, context={"model_id": "test/model"})
         assert result.vision is not None
         assert result.vision.model_type == "qwen3_vl"
+
+
+class TestLoadProjectorWeights:
+    """_load_projector_weights should handle both quantized and unquantized."""
+
+    def test_unquantized_loads_normally(self):
+        from exo.worker.engines.mlx.vision import _load_projector_weights
+
+        proj = nn.Linear(8, 4, bias=False)
+        weight = mx.ones((4, 8))
+        weights = {"weight": weight}
+        config: dict[str, object] = {}
+        _load_projector_weights(proj, weights, config)
+        assert proj.weight.shape == (4, 8)
+
+    def test_quantized_applies_nn_quantize(self):
+        from exo.worker.engines.mlx.vision import _load_projector_weights
+
+        # Create a quantized state dict by quantizing a reference module.
+        ref = nn.Linear(64, 32, bias=False)
+        nn.quantize(ref, bits=4, group_size=64)
+        mx.eval(ref.parameters())
+        quantized_weights = {
+            k: v for k, v in ref.parameters().items() for k, v in (
+                [(k, v)] if not isinstance(v, dict) else list(v.items())
+            )
+        }
+        # Flatten nested dict from ref.parameters()
+        flat: dict[str, mx.array] = {}
+        for k, v in ref.parameters().items():
+            if isinstance(v, dict):
+                for sub_k, sub_v in v.items():
+                    flat[f"{k}.{sub_k}"] = sub_v
+            else:
+                flat[k] = v
+
+        # Create a fresh (unquantized) module and load quantized weights.
+        target = nn.Linear(64, 32, bias=False)
+        config = {"quantization": {"bits": 4, "group_size": 64}}
+        _load_projector_weights(target, flat, config)
+        # After loading, the module should have quantized weight shape.
+        assert target.weight.shape == ref.weight.shape
