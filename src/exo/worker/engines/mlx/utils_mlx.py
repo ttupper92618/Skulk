@@ -71,6 +71,25 @@ from exo.worker.runner.bootstrap import logger
 Group = mx.distributed.Group
 
 
+def _patch_vlm_model_output(model: nn.Module) -> nn.Module:
+    """Patch an mlx-vlm model so __call__ returns a plain mx.array.
+
+    mlx-vlm models return LanguageModelOutput (a structured object with
+    .logits), but mlx-lm's generation pipeline expects a raw array.
+    This wraps __call__ to unwrap transparently.
+    """
+    original_call = model.__call__
+
+    def _unwrapping_call(*args: object, **kwargs: object) -> mx.array:
+        result = original_call(*args, **kwargs)
+        if hasattr(result, "logits"):
+            return result.logits  # type: ignore
+        return result  # type: ignore
+
+    model.__call__ = _unwrapping_call  # type: ignore
+    return model
+
+
 def load_model(model_path: Path, **kwargs: object) -> tuple[nn.Module, object]:
     """Load a model, trying mlx-lm first then falling back to mlx-vlm for vision models."""
     try:
@@ -84,6 +103,8 @@ def load_model(model_path: Path, **kwargs: object) -> tuple[nn.Module, object]:
             from mlx_vlm.utils import load_model as _mlx_vlm_load_model
 
             model = _mlx_vlm_load_model(model_path, **kwargs)
+            # Patch so mlx-lm's generation pipeline sees plain arrays
+            model = _patch_vlm_model_output(model)
             return model, None
         except ImportError:
             raise ValueError(
