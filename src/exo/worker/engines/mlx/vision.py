@@ -1144,6 +1144,7 @@ class VisionProcessor:
             formatted_messages,
             n_tokens_per_image,
             image_token,
+            model_type=self.vision_config.model_type,
             boi_token_id=self.vision_config.boi_token_id,
             eoi_token_id=self.vision_config.eoi_token_id,
         )

@@ -241,6 +241,70 @@ class TestGemma4ReferencePromptRenderer:
             == "<bos><|turn>user\n\n\n<|image><|image|><|image|><|image|><image|>\n\nwhat do you see?<turn|>\n<|turn>model\n"
         )
 
+    def test_process_native_forwards_gemma4_model_type_to_prompt_builder(
+        self, monkeypatch
+    ):
+        from exo.shared.models.model_cards import VisionCardConfig
+        from exo.worker.engines.mlx.vision import VisionProcessor
+
+        config = VisionCardConfig(
+            image_token_id=258880,
+            model_type="gemma4",
+            weights_repo="mlx-community/gemma-4-26b-a4b-it-4bit",
+            boi_token_id=255999,
+            eoi_token_id=258882,
+        )
+        processor = VisionProcessor(
+            config, ModelId("mlx-community/gemma-4-26b-a4b-it-4bit")
+        )
+        processor._encoder.ensure_processor_loaded = lambda: None  # type: ignore[method-assign]
+        processor._encoder._processor = SimpleNamespace(max_soft_tokens=280)  # type: ignore[attr-defined]
+        processor._encoder.preprocess_images = (  # type: ignore[method-assign]
+            lambda images, processor_kwargs=None: (mx.zeros((1, 3, 16, 16)), None, [1])
+        )
+
+        captured: dict[str, object] = {}
+
+        def _fake_build_vision_prompt(
+            tokenizer,
+            chat_template_messages,
+            n_tokens_per_image,
+            image_token,
+            model_type=None,
+            boi_token_id=None,
+            eoi_token_id=None,
+        ) -> str:
+            captured["model_type"] = model_type
+            return "<|image|>"
+
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision.build_vision_prompt",
+            _fake_build_vision_prompt,
+        )
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision._find_media_regions",
+            lambda *args, **kwargs: [],
+        )
+
+        class _Tokenizer:
+            has_thinking = False
+
+            def decode(self, token_ids):
+                return "<|image|>"
+
+            def encode(self, text, add_special_tokens=False):
+                return [258880]
+
+        result = processor._process_native(
+            images=[_fake_b64_image()],
+            chat_template_messages=[{"role": "user", "content": [{"type": "image"}]}],
+            tokenizer=_Tokenizer(),  # type: ignore[arg-type]
+            model=SimpleNamespace(),  # type: ignore[arg-type]
+        )
+
+        assert captured["model_type"] == "gemma4"
+        assert result.prompt_tokens.shape == (1,)
+
 
 class TestLoadProjectorWeights:
     """_load_projector_weights should handle both quantized and unquantized."""
