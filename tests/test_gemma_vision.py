@@ -177,3 +177,43 @@ class TestLoadProjectorWeights:
         _load_projector_weights(target, flat, config)
         # After loading, the module should have quantized weight shape.
         assert target.weight.shape == ref.weight.shape
+
+
+class TestHasNativeVision:
+    """has_native_vision should detect models with built-in vision support."""
+
+    def test_model_with_vision_tower_and_embed_vision(self):
+        from exo.worker.engines.mlx.vision import has_native_vision
+
+        class _FakeInner(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.vision_tower = nn.Linear(4, 4)
+                self.embed_vision = nn.Linear(4, 4)
+
+        class _FakeWrapper(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self._inner = _FakeInner()
+
+        assert has_native_vision(_FakeWrapper()) is True
+
+    def test_model_without_vision_tower(self):
+        from exo.worker.engines.mlx.vision import has_native_vision
+
+        class _Plain(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.some_layer = nn.Linear(4, 4)
+
+        assert has_native_vision(_Plain()) is False
+
+    def test_model_with_only_vision_tower(self):
+        from exo.worker.engines.mlx.vision import has_native_vision
+
+        class _Partial(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.vision_tower = nn.Linear(4, 4)
+
+        assert has_native_vision(_Partial()) is False
