@@ -21,6 +21,7 @@ import importlib
 import inspect
 import io
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -49,6 +50,89 @@ from exo.worker.runner.bootstrap import logger
 def _filter_config(cls: type, d: dict[str, Any]) -> dict[str, Any]:
     valid = set(inspect.signature(cls.__init__).parameters.keys()) - {"self"}
     return {k: v for k, v in d.items() if k in valid}  # type: ignore
+
+
+def _load_mlx_vlm_image_processor_from_pretrained(
+    proc_mod: Any, repo: str
+) -> Any | None:
+    """Load an MLX-VLM processor via ``from_pretrained`` and extract its image processor.
+
+    Gemma 4's standalone ``Gemma4ImageProcessor`` defaults to a low visual token
+    budget unless it is initialized from ``processor_config.json``. When
+    ``transformers.AutoImageProcessor`` does not recognize the model type, we need
+    to follow MLX-VLM's processor loading path so model-specific preprocessing
+    settings are preserved.
+    """
+    for attr_name in dir(proc_mod):
+        obj = getattr(proc_mod, attr_name)
+        if (
+            isinstance(obj, type)
+            and attr_name.endswith("Processor")
+            and "ImageProcessor" not in attr_name
+            and hasattr(obj, "from_pretrained")
+        ):
+            try:
+                processor = obj.from_pretrained(repo)
+            except Exception as exc:
+                logger.info(
+                    f"mlx_vlm {attr_name}.from_pretrained failed for {repo}: {exc}"
+                )
+                continue
+            image_processor = getattr(processor, "image_processor", None)
+            if image_processor is not None:
+                logger.info(f"Using mlx_vlm {attr_name}.from_pretrained image processor")
+                return image_processor
+    return None
+
+
+def _gemma4_native_processor_kwargs(
+    chat_template_messages: list[dict[str, Any]], processor: Any
+) -> dict[str, Any]:
+    """Select processor kwargs for Gemma 4 native vision preprocessing.
+
+    Image-only requests rely entirely on the visual stream. A slightly higher
+    visual token budget keeps screenshots and text-dense images from being
+    under-resolved while staying well below the most expensive OCR setting.
+    """
+    has_text = False
+    for message in chat_template_messages:
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            has_text = True
+            break
+        if isinstance(content, list):
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and str(part.get("type", "")) == "text"
+                    and str(part.get("text", "")).strip()
+                ):
+                    has_text = True
+                    break
+        if has_text:
+            break
+
+    configured_budget = 560
+    override_value = os.environ.get("EXO_GEMMA4_IMAGE_ONLY_MAX_SOFT_TOKENS")
+    if override_value is not None:
+        with contextlib.suppress(ValueError):
+            parsed_override = int(override_value)
+            if parsed_override > 0:
+                configured_budget = parsed_override
+
+    current_budget = getattr(processor, "max_soft_tokens", None)
+    if (
+        has_text
+        or not isinstance(current_budget, int)
+        or current_budget >= configured_budget
+    ):
+        return {}
+
+    logger.info(
+        "Gemma 4 image-only prompt detected; raising max_soft_tokens "
+        f"from {current_budget} to {configured_budget} for better visual detail"
+    )
+    return {"max_soft_tokens": configured_budget}
 
 
 _video_processor_patched = False
@@ -397,22 +481,29 @@ class VisionEncoder:
                 proc_mod = self._import_mlx_vlm(  # type: ignore
                     f"processing_{self._config.model_type}"
                 )
+                self._processor = _load_mlx_vlm_image_processor_from_pretrained(
+                    proc_mod, repo
+                )
                 proc_cls = None
                 for attr in dir(proc_mod):  # type: ignore
                     obj = getattr(proc_mod, attr)  # type: ignore
                     if isinstance(obj, type) and "ImageProcessor" in attr:
                         proc_cls = obj
                         break
-                if proc_cls is None:
+                if self._processor is None and proc_cls is None:
                     raise ValueError(
                         f"No ImageProcessor found in mlx_vlm.models."
                         f"{self._config.model_type}.processing_{self._config.model_type}"
                     ) from None
-                self._processor = proc_cls()  # type: ignore
-                logger.info(f"Using mlx_vlm {proc_cls.__name__} as image processor")
+                if self._processor is None:
+                    self._processor = proc_cls()  # type: ignore[operator]
+                    logger.info(f"Using mlx_vlm {proc_cls.__name__} as image processor")
         if processor_repo:
             self._merge_kernel_size = vision_cfg.get("merge_kernel_size", [2, 2])  # type: ignore
             self._needs_nhwc = True
+        max_soft_tokens = getattr(self._processor, "max_soft_tokens", None)
+        if isinstance(max_soft_tokens, int):
+            logger.info(f"Image processor max_soft_tokens={max_soft_tokens}")
         logger.info(f"HF image processor loaded from {repo}")
         self._processor_loaded = True
 
@@ -526,11 +617,14 @@ class VisionEncoder:
         )
 
     def preprocess_images(
-        self, pil_images: list[Image.Image]
+        self,
+        pil_images: list[Image.Image],
+        *,
+        processor_kwargs: dict[str, Any] | None = None,
     ) -> tuple[mx.array | list[mx.array], mx.array | None, list[int]]:
         """Public interface to image preprocessing (pixel_values + token counts)."""
         self.ensure_processor_loaded()
-        return self._preprocess_images(pil_images)
+        return self._preprocess_images(pil_images, processor_kwargs=processor_kwargs)
 
     def encode_images(self, images: list[str]) -> tuple[mx.array, list[int]]:
         """Encode base64 images into feature tensors and per-image token counts."""
@@ -555,15 +649,20 @@ class VisionEncoder:
         return image_features, n_tokens_per_image
 
     def _preprocess_images(
-        self, pil_images: list[Image.Image]
+        self,
+        pil_images: list[Image.Image],
+        *,
+        processor_kwargs: dict[str, Any] | None = None,
     ) -> tuple[mx.array | list[mx.array], mx.array | None, list[int]]:
         """Run the image processor and return pixel values, optional grid, and token counts."""
         assert self._processor is not None
+        processor_kwargs = processor_kwargs or {}
 
         if self._config.processor_repo:
             processed = self._processor.preprocess(
                 [{"type": "image", "image": img} for img in pil_images],
                 return_tensors="np",
+                **processor_kwargs,
             )
             pixel_values = mx.array(processed["pixel_values"])  # type: ignore
             grid_thw = mx.array(processed["grid_thws"])  # type: ignore
@@ -575,7 +674,9 @@ class VisionEncoder:
             ]
             return pixel_values, grid_thw, n_tokens_per_image
 
-        raw: Any = self._processor(images=pil_images, return_tensors="np")
+        raw: Any = self._processor(
+            images=pil_images, return_tensors="np", **processor_kwargs
+        )
 
         # Gemma 4's processor returns (data_dict, num_soft_tokens_per_image).
         if isinstance(raw, tuple):
@@ -880,7 +981,7 @@ class VisionProcessor:
         prompt_tokens: mx.array = encode_prompt(tokenizer, prompt)
         prompt_tokens = fix_unmatched_think_end_tokens(prompt_tokens, tokenizer)
         n_image_tokens = int(
-            mx.sum(mx.equal(prompt_tokens, self.vision_config.image_token_id)).item()
+            np.count_nonzero(np.asarray(prompt_tokens) == self.vision_config.image_token_id)
         )
         logger.info(
             f"Encoded prompt: {len(prompt_tokens)} tokens, {n_image_tokens} image pad tokens"
@@ -924,13 +1025,21 @@ class VisionProcessor:
         path as mlx-vlm: vision tower -> projector -> masked_scatter."""
         logger.info("Using native vision pipeline (model has built-in vision tower)")
         self._encoder.ensure_processor_loaded()
+        processor = self._encoder._processor
+        assert processor is not None
 
         pil_images = [decode_base64_image(b64) for b64 in images]
         for idx, img in enumerate(pil_images):
             logger.info(f"Image {idx}: {img.width}x{img.height} mode={img.mode}")
 
+        processor_kwargs = (
+            _gemma4_native_processor_kwargs(chat_template_messages, processor)
+            if self.vision_config.model_type == "gemma4"
+            else {}
+        )
         pixel_values, _grid_thw, n_tokens_per_image = self._encoder.preprocess_images(
-            pil_images
+            pil_images,
+            processor_kwargs=processor_kwargs,
         )
         logger.info(
             f"Native vision: preprocessed {len(images)} image(s), "
@@ -956,7 +1065,7 @@ class VisionProcessor:
         prompt_tokens: mx.array = encode_prompt(tokenizer, prompt)
         prompt_tokens = fix_unmatched_think_end_tokens(prompt_tokens, tokenizer)
         n_image_tokens = int(
-            mx.sum(mx.equal(prompt_tokens, self.vision_config.image_token_id)).item()
+            np.count_nonzero(np.asarray(prompt_tokens) == self.vision_config.image_token_id)
         )
         logger.info(
             f"Encoded prompt: {len(prompt_tokens)} tokens, {n_image_tokens} image pad tokens"

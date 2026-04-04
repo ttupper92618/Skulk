@@ -71,6 +71,206 @@ from exo.worker.runner.bootstrap import logger
 Group = mx.distributed.Group
 
 
+def _gemma4_output_length_for_pixel_values(
+    pixel_values: mx.array,
+    patch_size: int,
+    pooling_kernel_size: int,
+) -> int:
+    """Compute Gemma 4's pooled visual token count for a preprocessed image batch.
+
+    Gemma 4's processor resizes images so the patch grid is divisible by the
+    pooling kernel size. The number of pooled visual tokens is therefore the
+    number of patches divided by ``pooling_kernel_size ** 2``.
+    """
+    if pixel_values.ndim != 4:
+        raise ValueError(
+            "Gemma 4 vision expects pixel values shaped [batch, channels, height, width]"
+        )
+
+    _, _, height, width = pixel_values.shape
+    patches_per_image = (height // patch_size) * (width // patch_size)
+    pooled_tokens, remainder = divmod(
+        patches_per_image, pooling_kernel_size * pooling_kernel_size
+    )
+    if remainder != 0:
+        raise ValueError(
+            "Gemma 4 preprocessing produced a patch grid that cannot be pooled "
+            f"cleanly: {patches_per_image=} is not divisible by "
+            f"{pooling_kernel_size ** 2=}"
+        )
+    return pooled_tokens
+
+
+def _gemma4_patch_positions_and_padding(
+    pixel_values: mx.array,
+    patch_size: int,
+    max_patches: int,
+) -> tuple[mx.array, mx.array]:
+    """Build Gemma 4 patch positions with padding that matches the real sequence length.
+
+    MLX-VLM's Gemma 4 implementation pads patch positions up to ``max_patches`` when
+    the processed image is small enough, but some higher token budgets produce more
+    real patches than that default cap. In that case we must stop padding entirely
+    so the patch positions, attention mask, and hidden-state sequence all agree on
+    the same length.
+    """
+    if pixel_values.ndim != 4:
+        raise ValueError(
+            "Gemma 4 vision expects pixel values shaped [batch, channels, height, width]"
+        )
+
+    batch_size, _, height, width = pixel_values.shape
+    patch_height = height // patch_size
+    patch_width = width // patch_size
+    num_real_patches = patch_height * patch_width
+
+    grid_x = mx.arange(patch_width, dtype=mx.int32)
+    grid_y = mx.arange(patch_height, dtype=mx.int32)
+    mesh_x, mesh_y = mx.meshgrid(grid_x, grid_y, indexing="xy")
+    real_positions = mx.stack([mesh_x.reshape(-1), mesh_y.reshape(-1)], axis=-1)
+    real_positions = mx.broadcast_to(
+        mx.expand_dims(real_positions, axis=0),
+        (batch_size, num_real_patches, 2),
+    )
+
+    if num_real_patches >= max_patches:
+        padding_positions = mx.zeros((batch_size, num_real_patches), dtype=mx.bool_)
+        return real_positions, padding_positions
+
+    num_padding = max_patches - num_real_patches
+    pad_positions = mx.full((batch_size, num_padding, 2), -1, dtype=mx.int32)
+    patch_positions = mx.concatenate([real_positions, pad_positions], axis=1)
+    padding_positions = mx.concatenate(
+        [
+            mx.zeros((batch_size, num_real_patches), dtype=mx.bool_),
+            mx.ones((batch_size, num_padding), dtype=mx.bool_),
+        ],
+        axis=1,
+    )
+    return patch_positions, padding_positions
+
+
+class _Gemma4DynamicVisionTower(nn.Module):
+    """Wrap Gemma 4's vision tower so pooling matches the processor's token count.
+
+    The current MLX-VLM Gemma 4 encoder always pools to
+    ``config.default_output_length`` (280), even when the processor resized the
+    image to produce a different number of soft tokens. Wide images can therefore
+    lose a large fraction of their patches during pooling and produce unrelated
+    captions. This wrapper keeps the existing encoder path intact but derives the
+    pooling length from the actual preprocessed image size.
+    """
+
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self._inner = inner
+
+    def _encode_one(self, pixel_values: mx.array) -> mx.array:
+        if pixel_values.ndim != 4:
+            raise ValueError(
+                "Gemma 4 vision tower expects batched pixel values for native vision"
+            )
+
+        patch_size = int(self._inner.patch_size)
+        pooling_kernel_size = int(self._inner.pooling_kernel_size)
+        output_length = _gemma4_output_length_for_pixel_values(
+            pixel_values,
+            patch_size=patch_size,
+            pooling_kernel_size=pooling_kernel_size,
+        )
+        logger.info(
+            "Gemma 4 native vision pooling: "
+            f"image_shape={tuple(pixel_values.shape)} "
+            f"patch_size={patch_size} "
+            f"pooling_kernel_size={pooling_kernel_size} "
+            f"default_output_length={getattr(self._inner, 'default_output_length', 'unknown')} "
+            f"dynamic_output_length={output_length}"
+        )
+
+        batch_size, _, height, width = pixel_values.shape
+        num_real_patches = (height // patch_size) * (width // patch_size)
+        patch_positions, padding_positions = _gemma4_patch_positions_and_padding(
+            pixel_values,
+            patch_size=patch_size,
+            max_patches=int(self._inner.max_patches),
+        )
+        sequence_length = patch_positions.shape[1]
+
+        inputs_embeds = self._inner.patch_embedder(
+            pixel_values,
+            patch_positions[:, :num_real_patches],
+            padding_positions[:, :num_real_patches],
+        )
+
+        num_padding = sequence_length - num_real_patches
+        if num_padding > 0:
+            pad_embeds = mx.zeros(
+                (batch_size, num_padding, inputs_embeds.shape[-1]),
+                dtype=inputs_embeds.dtype,
+            )
+            inputs_embeds = mx.concatenate([inputs_embeds, pad_embeds], axis=1)
+
+        valid_mask = ~padding_positions
+        attn_mask = mx.expand_dims(valid_mask, 1) * mx.expand_dims(valid_mask, 2)
+        neg_inf = mx.array(float("-inf"), dtype=inputs_embeds.dtype)
+        attn_mask = mx.where(
+            attn_mask, mx.array(0.0, dtype=inputs_embeds.dtype), neg_inf
+        )
+        attn_mask = mx.expand_dims(attn_mask, 1)
+
+        hidden_states = self._inner.encoder(inputs_embeds, patch_positions, attn_mask)
+        pooled, pool_mask = self._inner.pooler(
+            hidden_states,
+            patch_positions,
+            padding_positions,
+            output_length=output_length,
+        )
+
+        pooled_mask = pool_mask if pool_mask.shape[1] == output_length else ~pool_mask
+        all_real: list[mx.array] = []
+        for batch_idx in range(batch_size):
+            n_valid = int(pooled_mask[batch_idx].astype(mx.int32).sum().item())
+            all_real.append(pooled[batch_idx, :n_valid])
+
+        hidden_states = mx.concatenate(all_real, axis=0)[None]
+
+        if getattr(getattr(self._inner, "config", None), "standardize", False):
+            hidden_states = (hidden_states - self._inner.std_bias) * self._inner.std_scale
+
+        return hidden_states
+
+    def __call__(self, pixel_values: mx.array | list[mx.array]) -> mx.array:
+        if isinstance(pixel_values, list):
+            features: list[mx.array] = []
+            for pixel_value in pixel_values:
+                batched = pixel_value[None] if pixel_value.ndim == 3 else pixel_value
+                encoded = self._encode_one(batched)
+                features.append(encoded[0] if encoded.ndim == 3 else encoded)
+            return mx.concatenate(features, axis=0)[None]
+        return self._encode_one(pixel_values)
+
+    def __getattr__(self, name: str) -> object:
+        if name == "_inner":
+            return super().__getattr__(name)
+        return getattr(self._inner, name)
+
+
+def _patch_gemma4_native_vision(model: nn.Module) -> nn.Module:
+    """Patch Gemma 4's native vision tower to pool using the real image grid size."""
+    if getattr(getattr(model, "config", None), "model_type", None) != "gemma4":
+        return model
+
+    vision_tower = getattr(model, "vision_tower", None)
+    if vision_tower is None or isinstance(vision_tower, _Gemma4DynamicVisionTower):
+        return model
+
+    logger.info(
+        "Patching Gemma 4 vision tower to use dynamic pooling lengths for native vision"
+    )
+    model.vision_tower = _Gemma4DynamicVisionTower(vision_tower)
+    return model
+
+
 class _VlmModelWrapper(nn.Module):
     """Wrapper that unwraps LanguageModelOutput → mx.array for mlx-lm compat.
 
@@ -127,6 +327,7 @@ def load_model(model_path: Path, **kwargs: object) -> tuple[nn.Module, object]:
             from mlx_vlm.utils import load_model as _mlx_vlm_load_model
 
             model = _mlx_vlm_load_model(model_path, **kwargs)
+            model = _patch_gemma4_native_vision(model)
             # Wrap so mlx-lm's generation pipeline sees plain arrays
             return _VlmModelWrapper(model), None
         except ImportError:
