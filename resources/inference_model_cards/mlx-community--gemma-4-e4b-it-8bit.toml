@@ -7,7 +7,7 @@ tasks = ["TextGeneration"]
 family = "gemma"
 quantization = "8bit"
 base_model = "Gemma 4 E4B"
-capabilities = ["text", "vision"]
+capabilities = ["text", "vision", "thinking"]
 
 [vision]
 image_token_id = 258880
