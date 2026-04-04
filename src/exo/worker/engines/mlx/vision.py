@@ -358,7 +358,9 @@ class VisionEncoder:
         mx.eval(self._vision_tower.parameters())
 
         if self._projector is not None and projector_weights:
-            self._projector.load_weights(list(projector_weights.items()))
+            # strict=False: quantized models include extra params (biases,
+            # scales) that the projector module doesn't define.
+            self._projector.load_weights(list(projector_weights.items()), strict=False)
             mx.eval(self._projector.parameters())
 
         n_vision = sum(v.size for _, v in vision_weights.items())
@@ -411,7 +413,9 @@ class VisionEncoder:
         mx.eval(self._vision_tower.parameters())
 
         if self._projector is not None and projector_weights:
-            self._projector.load_weights(list(projector_weights.items()))
+            # strict=False: quantized models include extra params (biases,
+            # scales) that the projector module doesn't define.
+            self._projector.load_weights(list(projector_weights.items()), strict=False)
             mx.eval(self._projector.parameters())
 
         n_vision = sum(v.size for _, v in vision_weights.items())  # type: ignore
