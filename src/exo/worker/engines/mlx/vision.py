@@ -163,21 +163,25 @@ _QUANTIZATION_SUFFIXES = (".biases", ".scales")
 
 
 def _load_projector_weights(
-    projector: nn.Module, weights: dict[str, mx.array]
+    projector: nn.Module, weights: dict[str, mx.array], config: dict[str, Any]
 ) -> None:
-    """Load projector weights, filtering out quantization-only tensors.
+    """Load projector weights, quantizing the module first if needed.
 
-    Quantized checkpoints include auxiliary tensors (biases, scales) that
-    the projector module doesn't define. We drop only those known extras
-    and keep strict loading so genuine incompatibilities are not masked."""
-    dropped = [k for k in weights if k.endswith(_QUANTIZATION_SUFFIXES)]
-    if dropped:
+    Quantized models store Linear weights in a compressed format with
+    accompanying ``.scales`` and ``.biases`` tensors. We detect this by
+    checking for those keys and apply ``nn.quantize`` to the projector
+    before loading so the shapes match."""
+    has_quantized = any(k.endswith(_QUANTIZATION_SUFFIXES) for k in weights)
+    if has_quantized:
+        quant_cfg = config.get("quantization", {})  # pyright: ignore[reportAny]
+        bits = int(quant_cfg.get("bits", 4))  # pyright: ignore[reportAny]
+        group_size = int(quant_cfg.get("group_size", 64))  # pyright: ignore[reportAny]
         logger.info(
-            "Dropping quantization-only projector tensors: "
-            + ", ".join(sorted(dropped))
+            f"Quantizing projector module ({bits}-bit, group_size={group_size}) "
+            "to match checkpoint format"
         )
-    filtered = {k: v for k, v in weights.items() if k not in dropped}
-    projector.load_weights(list(filtered.items()))
+        nn.quantize(projector, bits=bits, group_size=group_size)
+    projector.load_weights(list(weights.items()))
 
 
 def _instantiate_projector(
@@ -316,9 +320,9 @@ class VisionEncoder:
 
         processor_repo = self._config.processor_repo
         if processor_repo:
-            self._load_weights_from_separate_repo()
+            self._load_weights_from_separate_repo(config)
         else:
-            self._load_weights_from_model_repo()
+            self._load_weights_from_model_repo(config)
 
         repo = processor_repo or str(self._model_path)
         image_proc = load_image_processor(repo)
@@ -333,7 +337,7 @@ class VisionEncoder:
             self._needs_nhwc = True
         logger.info(f"HF image processor loaded from {repo}")
 
-    def _load_weights_from_separate_repo(self) -> None:
+    def _load_weights_from_separate_repo(self, config: dict[str, Any]) -> None:
         safetensors_files = list(self._model_path.glob("*.safetensors"))
         if not safetensors_files:
             raise FileNotFoundError(f"No safetensors files found in {self._model_path}")
@@ -379,7 +383,7 @@ class VisionEncoder:
         mx.eval(self._vision_tower.parameters())
 
         if self._projector is not None and projector_weights:
-            _load_projector_weights(self._projector, projector_weights)
+            _load_projector_weights(self._projector, projector_weights, config)
             mx.eval(self._projector.parameters())
 
         n_vision = sum(v.size for _, v in vision_weights.items())
@@ -389,7 +393,7 @@ class VisionEncoder:
             + (f", projector: {n_proj / 1e6:.1f}M params" if n_proj else "")
         )
 
-    def _load_weights_from_model_repo(self) -> None:
+    def _load_weights_from_model_repo(self, config: dict[str, Any]) -> None:
         safetensors_files = sorted(self._model_path.glob("*.safetensors"))
         if not safetensors_files:
             raise FileNotFoundError(f"No safetensors files found in {self._model_path}")
@@ -432,7 +436,7 @@ class VisionEncoder:
         mx.eval(self._vision_tower.parameters())
 
         if self._projector is not None and projector_weights:
-            _load_projector_weights(self._projector, projector_weights)
+            _load_projector_weights(self._projector, projector_weights, config)
             mx.eval(self._projector.parameters())
 
         n_vision = sum(v.size for _, v in vision_weights.items())  # type: ignore
