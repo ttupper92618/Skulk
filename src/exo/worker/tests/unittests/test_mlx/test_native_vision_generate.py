@@ -1,0 +1,176 @@
+"""Tests for native-vision generation routing."""
+
+from importlib import import_module
+
+import mlx.core as mx
+
+from exo.shared.types.common import ModelId
+from exo.shared.types.text_generation import InputMessage, TextGenerationTaskParams
+from exo.shared.types.worker.runner_response import GenerationResponse
+from exo.worker.engines.mlx.generator.generate import (
+    _mlx_generate_native_vision,
+    mlx_generate,
+)
+from exo.worker.engines.mlx.vision import VisionResult
+
+
+class _FakeDetokenizer:
+    """Minimal streaming detokenizer for native vision generation tests."""
+
+    def __init__(self) -> None:
+        self.last_segment = ""
+
+    def reset(self) -> None:
+        self.last_segment = ""
+
+    def add_token(self, token: int) -> None:
+        mapping = {
+            101: "Hello",
+            102: " world",
+        }
+        self.last_segment = mapping.get(token, "")
+
+    def finalize(self) -> None:
+        self.last_segment = ""
+
+
+class _FakeTokenizer:
+    """Tokenizer stub with detokenizer and EOS metadata."""
+
+    def __init__(self) -> None:
+        self.detokenizer = _FakeDetokenizer()
+        self.eos_token_ids = [999]
+        self.has_thinking = False
+
+    def decode(self, token_ids: list[int]) -> str:
+        return "".join(str(token_id) for token_id in token_ids)
+
+    def encode(self, _text: str, add_special_tokens: bool = False) -> list[int]:
+        return [1, 2, 3]
+
+
+def test_native_vision_generation_uses_mlx_vlm_generate_step(monkeypatch) -> None:
+    """Native vision should stream through MLX-VLM's multimodal generate path."""
+
+    def _fake_generate_step(
+        input_ids: mx.array,
+        model: object,
+        pixel_values: mx.array,
+        mask: object,
+        **_kwargs: object,
+    ):
+        assert input_ids.shape == (1, 3)
+        assert pixel_values.shape == (1,)
+        yield mx.array(101), mx.zeros((8,))
+        yield mx.array(102), mx.zeros((8,))
+        yield mx.array(999), mx.zeros((8,))
+
+    monkeypatch.setattr(
+        import_module("mlx_vlm.generate"),
+        "generate_step",
+        _fake_generate_step,
+    )
+
+    task = TextGenerationTaskParams(
+        model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+        input=[InputMessage(role="user", content="what is this?")],
+        max_output_tokens=8,
+        temperature=0.0,
+    )
+    vision = VisionResult(
+        prompt="ignored",
+        prompt_tokens=mx.array([1, 2, 3]),
+        embeddings=mx.zeros((1, 0, 1)),
+        media_regions=[],
+        pixel_values=mx.array([1.0]),
+    )
+
+    responses = list(
+        _mlx_generate_native_vision(
+            model=object(),  # type: ignore[arg-type]
+            tokenizer=_FakeTokenizer(),  # type: ignore[arg-type]
+            task=task,
+            all_prompt_tokens=vision.prompt_tokens,
+            vision=vision,
+            sampler=lambda logits: logits,  # type: ignore[arg-type]
+            logits_processors=[],
+            on_prefill_progress=None,
+            on_generation_token=None,
+            group=None,
+        )
+    )
+
+    assert [response.text for response in responses[:-1]] == ["Hello", " world"]
+    assert responses[-1].finish_reason == "stop"
+    assert responses[-1].usage is not None
+    assert responses[-1].usage.prompt_tokens == 3
+    assert responses[-1].usage.completion_tokens == 2
+
+
+def test_mlx_generate_routes_native_vision_through_reference_path(monkeypatch) -> None:
+    """``mlx_generate`` should bypass generic text generation for native vision."""
+
+    vision = VisionResult(
+        prompt="ignored",
+        prompt_tokens=mx.array([1, 2, 3]),
+        embeddings=mx.zeros((1, 0, 1)),
+        media_regions=[],
+        pixel_values=mx.array([1.0]),
+    )
+
+    def _fake_prepare_vision(**_kwargs: object) -> VisionResult:
+        return vision
+
+    def _fake_native_generate(**_kwargs: object):
+        yield GenerationResponse(text="native", token=101, usage=None)
+
+    def _fail_stream_generate(*_args: object, **_kwargs: object):
+        raise AssertionError("native vision should not use generic stream_generate")
+
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.prepare_vision",
+        _fake_prepare_vision,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate._mlx_generate_native_vision",
+        _fake_native_generate,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.stream_generate",
+        _fail_stream_generate,
+    )
+    monkeypatch.setattr(
+        "exo.worker.engines.mlx.generator.generate.make_kv_cache",
+        lambda **_kwargs: [],
+    )
+
+    task = TextGenerationTaskParams(
+        model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+        input=[InputMessage(role="user", content="what is this?")],
+        chat_template_messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "what is this?"},
+                ],
+            }
+        ],
+        images=["ignored"],
+        max_output_tokens=8,
+        temperature=0.0,
+    )
+
+    responses = list(
+        mlx_generate(
+            model=object(),  # type: ignore[arg-type]
+            tokenizer=_FakeTokenizer(),  # type: ignore[arg-type]
+            task=task,
+            prompt="<bos>",
+            kv_prefix_cache=None,
+            group=None,
+            vision_processor=object(),  # type: ignore[arg-type]
+        )
+    )
+
+    assert [response.text for response in responses] == ["native"]
