@@ -13,6 +13,7 @@ from PIL import Image
 from exo.api.types import ImageEditsTaskParams
 from exo.download.download_utils import resolve_model_in_path
 from exo.shared.apply import apply
+from exo.shared.constants import EXO_IMAGE_TRANSPORT_DEBUG
 from exo.shared.models.model_cards import ModelId, add_to_card_cache, delete_custom_card
 from exo.shared.types.chunks import InputImageChunk
 from exo.shared.types.commands import (
@@ -61,6 +62,20 @@ from exo.worker.plan import plan
 from exo.worker.runner.runner_supervisor import RunnerSupervisor
 
 
+def _log_image_transport(message: str) -> None:
+    """Emit image transport logs only at INFO when explicitly requested.
+
+    Multimodal traffic can be large and frequent, so the default path keeps
+    these diagnostics at DEBUG. Operators can opt in with
+    ``SKULK_IMAGE_TRANSPORT_DEBUG=1`` (or the legacy ``EXO_*`` alias) when
+    they need end-to-end payload fingerprints.
+    """
+    if EXO_IMAGE_TRANSPORT_DEBUG:
+        logger.info(message)
+    else:
+        logger.debug(message)
+
+
 def _log_image_payload_debug(
     source: str,
     image_index: int,
@@ -80,19 +95,20 @@ def _log_image_payload_debug(
             f" matches_expected={b64_sha256 == expected_b64_sha256}"
         )
 
-    try:
-        raw_bytes = base64.b64decode(image_b64)
-        raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        with Image.open(io.BytesIO(raw_bytes)) as pil_image:
-            message += (
-                f" raw_bytes={len(raw_bytes)} raw_sha256={raw_sha256[:12]}..."
-                f" decoded={pil_image.width}x{pil_image.height}"
-                f" mode={pil_image.mode}"
-            )
-    except Exception as exc:
-        message += f" decode_failed={type(exc).__name__}: {exc}"
+    if EXO_IMAGE_TRANSPORT_DEBUG:
+        try:
+            raw_bytes = base64.b64decode(image_b64)
+            raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+            with Image.open(io.BytesIO(raw_bytes)) as pil_image:
+                message += (
+                    f" raw_bytes={len(raw_bytes)} raw_sha256={raw_sha256[:12]}..."
+                    f" decoded={pil_image.width}x{pil_image.height}"
+                    f" mode={pil_image.mode}"
+                )
+        except Exception as exc:
+            message += f" decode_failed={type(exc).__name__}: {exc}"
 
-    logger.info(message)
+    _log_image_transport(message)
 
 
 class Worker:

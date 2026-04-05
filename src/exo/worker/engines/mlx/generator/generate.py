@@ -2,6 +2,7 @@ import contextlib
 import functools
 import math
 import os
+import re
 import time
 from copy import deepcopy
 from importlib import metadata
@@ -78,10 +79,10 @@ def _parse_version_triplet(version_str: str) -> tuple[int, int, int]:
     """Parse a package version into a coarse comparable triplet."""
     parts: list[int] = []
     for piece in version_str.split("."):
-        digits = "".join(ch for ch in piece if ch.isdigit())
-        if not digits:
+        match = re.match(r"(\d+)", piece)
+        if match is None:
             break
-        parts.append(int(digits))
+        parts.append(int(match.group(1)))
         if len(parts) == 3:
             break
     while len(parts) < 3:

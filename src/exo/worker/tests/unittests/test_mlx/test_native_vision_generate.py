@@ -9,6 +9,7 @@ from exo.shared.types.text_generation import InputMessage, TextGenerationTaskPar
 from exo.shared.types.worker.runner_response import GenerationResponse
 from exo.worker.engines.mlx.generator.generate import (
     _mlx_generate_native_vision,
+    _parse_version_triplet,
     _should_use_native_vision_reference_path,
     mlx_generate,
 )
@@ -282,3 +283,10 @@ def test_native_vision_reference_path_version_gate(monkeypatch) -> None:
     )
 
     assert _should_use_native_vision_reference_path() is False
+
+
+def test_parse_version_triplet_ignores_suffix_digits() -> None:
+    """Prerelease suffix digits should not inflate release comparisons."""
+
+    assert _parse_version_triplet("0.31.1rc2") == (0, 31, 1)
+    assert _parse_version_triplet("0.31.1.dev4") == (0, 31, 1)

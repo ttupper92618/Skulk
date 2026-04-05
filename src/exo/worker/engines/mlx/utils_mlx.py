@@ -852,6 +852,8 @@ def apply_chat_template(
             add_generation_prompt=True,
             enable_thinking=task_params.enable_thinking,
         )
+        if partial_assistant_content:
+            prompt += partial_assistant_content
         logger.info(prompt)
         return prompt
 

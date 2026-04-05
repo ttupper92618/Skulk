@@ -133,6 +133,7 @@ from exo.shared.constants import (
     EXO_CACHE_HOME,
     EXO_EVENT_LOG_DIR,
     EXO_IMAGE_CACHE_DIR,
+    EXO_IMAGE_TRANSPORT_DEBUG,
     EXO_MAX_CHUNK_SIZE,
     EXO_TRACING_CACHE_DIR,
 )
@@ -252,6 +253,14 @@ def _ensure_seed(params: AdvancedImageParams | None) -> AdvancedImageParams:
     if params.seed is None:
         return params.model_copy(update={"seed": random.randint(0, 2**32 - 1)})
     return params
+
+
+def _log_image_transport(message: str) -> None:
+    """Emit verbose image transport diagnostics only when explicitly enabled."""
+    if EXO_IMAGE_TRANSPORT_DEBUG:
+        logger.info(message)
+    else:
+        logger.debug(message)
 
 
 def _create_fastapi_app() -> FastAPI:
@@ -1166,17 +1175,17 @@ class API:
                 self._sent_image_hashes.add(h)
                 new_images.append((idx, img))
 
-        logger.info(
+        _log_image_transport(
             f"TextGeneration image transport: total={len(images)} "
             f"new={len(new_images)} cached={len(cached_hashes)}"
         )
         for idx, img in new_images:
-            logger.info(
+            _log_image_transport(
                 f"TextGeneration new image {idx}: b64_chars={len(img)} "
                 f"b64_sha256={hashlib.sha256(img.encode('ascii')).hexdigest()[:12]}..."
             )
         for idx, h in cached_hashes.items():
-            logger.info(
+            _log_image_transport(
                 f"TextGeneration cached image {idx}: "
                 f"b64_sha256={h[:12]}..."
             )

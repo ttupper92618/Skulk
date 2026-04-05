@@ -206,6 +206,24 @@ class TestGemma4ReferencePromptRenderer:
 
         assert prompt.endswith("<|turn>model\n<|channel>thought\n<channel|>")
 
+    def test_apply_chat_template_preserves_gemma4_assistant_prefill_suffix(self):
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 should not use generic chat templating here")
+
+        task = TextGenerationTaskParams(
+            model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+            input=[InputMessage(role="user", content="hello")],
+            chat_template_messages=[
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "Draft answer:"},
+            ],
+        )
+
+        prompt = apply_chat_template(_Tokenizer(), task)  # type: ignore[arg-type]
+
+        assert prompt.endswith("<|channel>thought\n<channel|>Draft answer:")
+
     def test_build_vision_prompt_uses_reference_renderer_for_gemma4(self):
         from exo.worker.engines.mlx.vision import build_vision_prompt
 
