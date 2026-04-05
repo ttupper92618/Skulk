@@ -100,6 +100,53 @@ def _should_use_native_vision_reference_path() -> bool:
     )
 
 
+def _slice_native_pixel_values_for_uncached_suffix(
+    pixel_values: mx.array | list[mx.array],
+    media_regions: list[MediaRegion],
+    prefix_hit_length: int,
+) -> mx.array | list[mx.array] | None:
+    """Keep only native vision pixel values still referenced by uncached tokens.
+
+    Prefix-cache hits can reuse earlier image regions from the KV cache. Native
+    vision models consume raw pixel values in prompt order, so after a prefix
+    hit we must drop any already-cached images from ``pixel_values`` or the
+    first stale image will be paired with the next uncached image token span.
+    """
+    if prefix_hit_length <= 0 or not media_regions:
+        return pixel_values
+
+    remaining_indices = [
+        idx
+        for idx, region in enumerate(media_regions)
+        if region.end_pos > prefix_hit_length
+    ]
+    if not remaining_indices:
+        logger.info(
+            "Native vision prefix cache hit reused all image regions; "
+            "skipping pixel-value injection for cached images"
+        )
+        return None
+
+    if remaining_indices == list(range(len(media_regions))):
+        return pixel_values
+
+    logger.info(
+        "Native vision prefix cache hit trimmed pixel_values from "
+        f"{len(media_regions)} to {len(remaining_indices)} image(s) "
+        f"(restore_pos={prefix_hit_length})"
+    )
+
+    if isinstance(pixel_values, list):
+        return [pixel_values[idx] for idx in remaining_indices]
+
+    first_idx = remaining_indices[0]
+    expected_suffix = list(range(first_idx, len(media_regions)))
+    if remaining_indices == expected_suffix:
+        return pixel_values[first_idx:]
+
+    return mx.stack([pixel_values[idx] for idx in remaining_indices], axis=0)
+
+
 @contextlib.contextmanager
 def patch_embed_tokens(
     model: Model, embeddings: mx.array, start_offset: int = 0, token_count: int = 0
@@ -820,11 +867,19 @@ def mlx_generate(
             "mlx/mlx-vlm stack"
         )
 
+    native_pixel_values: mx.array | list[mx.array] | None = None
     if vision is not None and vision.pixel_values is not None:
+        native_pixel_values = _slice_native_pixel_values_for_uncached_suffix(
+            vision.pixel_values,
+            media_regions,
+            prefix_hit_length,
+        )
+
+    if native_pixel_values is not None:
         if hasattr(model, "set_pixel_values"):
-            model.set_pixel_values(vision.pixel_values)  # type: ignore[attr-defined]
+            model.set_pixel_values(native_pixel_values)  # type: ignore[attr-defined]
         else:
-            model._pixel_values = vision.pixel_values  # type: ignore[attr-defined]
+            model._pixel_values = native_pixel_values  # type: ignore[attr-defined]
         maybe_vision_ctx = contextlib.nullcontext()
     elif vision is not None:
         maybe_vision_ctx = patch_embed_tokens(
