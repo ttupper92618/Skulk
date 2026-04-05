@@ -1,8 +1,10 @@
 import contextlib
 import functools
 import math
+import os
 import time
 from copy import deepcopy
+from importlib import metadata
 from typing import Callable, Generator, cast, get_args
 
 import mlx.core as mx
@@ -13,6 +15,7 @@ from mlx_lm.generate import (
 from mlx_lm.models.cache import ArraysCache, RotatingKVCache
 from mlx_lm.sample_utils import make_logits_processors, make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper
+from packaging.version import InvalidVersion, Version
 
 from exo.api.types import (
     CompletionTokensDetails,
@@ -70,6 +73,31 @@ from exo.worker.runner.bootstrap import logger
 generation_stream = mx.new_stream(mx.default_device())
 
 _MIN_PREFIX_HIT_RATIO_TO_UPDATE = 0.5
+
+
+def _should_use_native_vision_reference_path() -> bool:
+    """Return whether native vision should force MLX-VLM's reference decode path.
+
+    The reference path was needed to work around older upstream MLX Gemma 4
+    vision behavior, but it bypasses Skulk's faster pipeline-aware generation
+    path. Once the runtime is on the fixed upstream stack, we prefer the legacy
+    Skulk path again for throughput.
+    """
+    override = os.environ.get("EXO_NATIVE_VISION_REFERENCE_PATH")
+    if override is not None:
+        normalized = override.strip().lower()
+        return normalized not in {"0", "false", "no", "off"}
+
+    try:
+        mlx_version = Version(metadata.version("mlx"))
+        mlx_vlm_version = Version(metadata.version("mlx-vlm"))
+    except (metadata.PackageNotFoundError, InvalidVersion):
+        # Be conservative if metadata is unavailable.
+        return True
+
+    return not (
+        mlx_version >= Version("0.31.1") and mlx_vlm_version >= Version("0.4.4")
+    )
 
 
 @contextlib.contextmanager
@@ -499,6 +527,180 @@ def extract_top_logprobs(
     return selected_logprob, top_logprob_items
 
 
+def _mlx_generate_native_vision(
+    model: Model,
+    tokenizer: TokenizerWrapper,
+    task: TextGenerationTaskParams,
+    all_prompt_tokens: mx.array,
+    vision: VisionResult,
+    sampler: Callable[[mx.array], mx.array],
+    logits_processors: list[Callable[[mx.array, mx.array], mx.array]],
+    on_prefill_progress: Callable[[int, int], None] | None,
+    on_generation_token: Callable[[], None] | None,
+    group: mx.distributed.Group | None,
+) -> Generator[GenerationResponse]:
+    """Generate for native-vision models via MLX-VLM's multimodal path.
+
+    Gemma 4's reference MLX-VLM generation path computes multimodal input
+    embeddings up front through ``model.get_input_embeddings(...)`` and then
+    drives ``model.language_model`` directly. Running native-vision models
+    through generic ``mlx_lm.stream_generate`` can diverge from that path even
+    when prompt tokens and image preprocessing are correct, so we follow the
+    reference execution strategy here.
+    """
+    from mlx_vlm.generate import generate_step as vlm_generate_step
+
+    if vision.pixel_values is None:
+        raise ValueError("Native vision generation requires pixel values")
+
+    prompt_token_count = len(all_prompt_tokens)
+    max_tokens = task.max_output_tokens or MAX_TOKENS
+    stop_sequences: list[str] = (
+        ([task.stop] if isinstance(task.stop, str) else task.stop)
+        if task.stop is not None
+        else []
+    )
+    eos_token_ids = set(eos_ids_from_tokenizer(tokenizer))
+
+    detokenizer = tokenizer.detokenizer
+    detokenizer.reset()
+
+    if on_prefill_progress is not None:
+        on_prefill_progress(0, prompt_token_count)
+
+    prompt_start_time = time.perf_counter()
+    generation_start_time = prompt_start_time
+    prompt_tps = 0.0
+    first_token_seen = False
+    accumulated_text = ""
+    completion_tokens = 0
+    final_finish_reason: FinishReason = "length"
+    final_usage: Usage | None = None
+    final_stats: GenerationStats | None = None
+
+    logger.info("Starting native mlx-vlm multimodal decode")
+    mx_barrier(group)
+
+    for token, logprobs in vlm_generate_step(
+        input_ids=all_prompt_tokens[None],
+        model=model,
+        pixel_values=vision.pixel_values,
+        mask=None,
+        max_tokens=max_tokens,
+        sampler=sampler,
+        logits_processors=logits_processors,
+        prefill_step_size=4096,
+        kv_group_size=KV_GROUP_SIZE,
+        kv_bits=KV_BITS,
+    ):
+        token_id = int(token)
+
+        if not first_token_seen:
+            prompt_elapsed = time.perf_counter() - prompt_start_time
+            prompt_tps = (
+                prompt_token_count / prompt_elapsed if prompt_elapsed > 0 else 0.0
+            )
+            generation_start_time = time.perf_counter()
+            first_token_seen = True
+            if on_prefill_progress is not None:
+                on_prefill_progress(prompt_token_count, prompt_token_count)
+
+        if token_id in eos_token_ids:
+            final_finish_reason = "stop"
+            break
+
+        completion_tokens += 1
+        detokenizer.add_token(token_id)
+        text = detokenizer.last_segment
+        accumulated_text += text
+
+        stop_matched = False
+        if stop_sequences:
+            for stop_sequence in stop_sequences:
+                if stop_sequence in accumulated_text:
+                    stop_index = accumulated_text.find(stop_sequence)
+                    text_before_stop = accumulated_text[:stop_index]
+                    chunk_start = len(accumulated_text) - len(text)
+                    text = text_before_stop[chunk_start:]
+                    accumulated_text = text_before_stop
+                    final_finish_reason = "stop"
+                    stop_matched = True
+                    break
+
+        logprob: float | None = None
+        top_logprobs: list[TopLogprobItem] | None = None
+        if task.logprobs:
+            with mx.stream(generation_stream):
+                logprob, top_logprobs = extract_top_logprobs(
+                    logprobs=logprobs,
+                    tokenizer=tokenizer,
+                    top_logprobs=task.top_logprobs or DEFAULT_TOP_LOGPROBS,
+                    selected_token=token_id,
+                )
+
+        if on_generation_token is not None:
+            on_generation_token()
+
+        yield GenerationResponse(
+            text=text,
+            token=token_id,
+            logprob=logprob,
+            top_logprobs=top_logprobs,
+            finish_reason=None,
+            stats=None,
+            usage=None,
+        )
+
+        if stop_matched:
+            break
+    else:
+        final_finish_reason = "length"
+
+    detokenizer.finalize()
+    final_text = detokenizer.last_segment
+
+    if stop_sequences and final_text:
+        for stop_sequence in stop_sequences:
+            combined_text = accumulated_text + final_text
+            if stop_sequence in combined_text:
+                stop_index = combined_text.find(stop_sequence)
+                final_text = combined_text[len(accumulated_text) : stop_index]
+                accumulated_text = combined_text[:stop_index]
+                final_finish_reason = "stop"
+                break
+    else:
+        accumulated_text += final_text
+
+    generation_elapsed = time.perf_counter() - generation_start_time
+    generation_tps = completion_tokens / generation_elapsed if generation_elapsed > 0 else 0.0
+
+    final_stats = GenerationStats(
+        prompt_tps=float(prompt_tps),
+        generation_tps=float(generation_tps),
+        prompt_tokens=prompt_token_count,
+        generation_tokens=completion_tokens,
+        peak_memory_usage=Memory.from_gb(mx.get_peak_memory() / 1e9),
+    )
+    final_usage = Usage(
+        prompt_tokens=prompt_token_count,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_token_count + completion_tokens,
+        prompt_tokens_details=PromptTokensDetails(cached_tokens=0),
+        completion_tokens_details=CompletionTokensDetails(reasoning_tokens=0),
+    )
+
+    if on_generation_token is not None:
+        on_generation_token()
+
+    yield GenerationResponse(
+        text=final_text,
+        token=0,
+        finish_reason=final_finish_reason,
+        stats=final_stats,
+        usage=final_usage,
+    )
+
+
 def mlx_generate(
     model: Model,
     tokenizer: TokenizerWrapper,
@@ -560,6 +762,11 @@ def mlx_generate(
             logger.info(
                 f"KV cache hit: {prefix_hit_length}/{len(all_prompt_tokens)} tokens cached ({100 * prefix_hit_length / len(all_prompt_tokens):.1f}%)"
             )
+        else:
+            logger.info(
+                f"KV cache miss: 0/{len(all_prompt_tokens)} tokens cached "
+                f"(media_regions={len(media_regions)})"
+            )
 
     logits_processors: list[Callable[[mx.array, mx.array], mx.array]] = (
         make_logits_processors(
@@ -586,6 +793,32 @@ def mlx_generate(
         else []
     )
     max_stop_len = max((len(s) for s in stop_sequences), default=0)
+
+    if vision is not None and vision.pixel_values is not None:
+        if _should_use_native_vision_reference_path():
+            if kv_prefix_cache is not None:
+                logger.info(
+                    "Disabling KV prefix cache for native vision generation to follow "
+                    "the mlx-vlm reference execution path"
+                )
+            yield from _mlx_generate_native_vision(
+                model=model,
+                tokenizer=tokenizer,
+                task=task,
+                all_prompt_tokens=all_prompt_tokens,
+                vision=vision,
+                sampler=sampler,
+                logits_processors=logits_processors,
+                on_prefill_progress=on_prefill_progress,
+                on_generation_token=on_generation_token,
+                group=group,
+            )
+            return
+
+        logger.info(
+            "Using pipeline-aware native vision generation path on fixed "
+            "mlx/mlx-vlm stack"
+        )
 
     if vision is not None and vision.pixel_values is not None:
         if hasattr(model, "set_pixel_values"):

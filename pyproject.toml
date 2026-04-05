@@ -17,7 +17,7 @@ dependencies = [
   "loguru>=0.7.3",
   "exo_pyo3_bindings",                            # rust bindings
   "anyio==4.11.0",
-  "mlx; sys_platform == 'darwin'",
+  "mlx==0.31.1; sys_platform == 'darwin'",
   "mlx[cpu]==0.30.6; sys_platform == 'linux'",
   "mlx-lm",
   "mlx-optiq[convert]; sys_platform == 'darwin'",
@@ -32,7 +32,7 @@ dependencies = [
   "zstandard>=0.23.0",
   "pyyaml>=6.0.2",
   "types-PyYAML>=6.0.12",
-  "mlx-vlm>=0.4.3",
+  "mlx-vlm==0.4.4",
   "transformers>=5.0.0,<5.4.0",
 ]
 

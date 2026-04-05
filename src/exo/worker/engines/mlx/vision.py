@@ -21,8 +21,10 @@ import importlib
 import inspect
 import io
 import json
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -38,10 +40,12 @@ from safetensors import safe_open
 from transformers import AutoImageProcessor
 
 from exo.download.download_utils import build_model_path
+from exo.shared.constants import EXO_IMAGE_TRANSPORT_DEBUG
 from exo.shared.models.model_cards import VisionCardConfig
 from exo.shared.types.common import ModelId
 from exo.shared.types.mlx import Model
 from exo.worker.engines.mlx.cache import encode_prompt
+from exo.worker.engines.mlx.gemma4_prompt import render_gemma4_prompt
 from exo.worker.engines.mlx.utils_mlx import fix_unmatched_think_end_tokens
 from exo.worker.runner.bootstrap import logger
 
@@ -49,6 +53,90 @@ from exo.worker.runner.bootstrap import logger
 def _filter_config(cls: type, d: dict[str, Any]) -> dict[str, Any]:
     valid = set(inspect.signature(cls.__init__).parameters.keys()) - {"self"}
     return {k: v for k, v in d.items() if k in valid}  # type: ignore
+
+
+def _load_mlx_vlm_image_processor_from_pretrained(
+    proc_mod: Any, repo: str
+) -> Any | None:
+    """Load an MLX-VLM processor via ``from_pretrained`` and extract its image processor.
+
+    Gemma 4's standalone ``Gemma4ImageProcessor`` defaults to a low visual token
+    budget unless it is initialized from ``processor_config.json``. When
+    ``transformers.AutoImageProcessor`` does not recognize the model type, we need
+    to follow MLX-VLM's processor loading path so model-specific preprocessing
+    settings are preserved.
+    """
+    for attr_name in dir(proc_mod):
+        obj = getattr(proc_mod, attr_name)
+        if (
+            isinstance(obj, type)
+            and attr_name.endswith("Processor")
+            and "ImageProcessor" not in attr_name
+            and hasattr(obj, "from_pretrained")
+        ):
+            try:
+                processor = obj.from_pretrained(repo)
+            except Exception as exc:
+                logger.info(
+                    f"mlx_vlm {attr_name}.from_pretrained failed for {repo}: {exc}"
+                )
+                continue
+            image_processor = getattr(processor, "image_processor", None)
+            if image_processor is not None:
+                logger.info(f"Using mlx_vlm {attr_name}.from_pretrained image processor")
+                return image_processor
+    return None
+
+
+def _gemma4_native_processor_kwargs(
+    chat_template_messages: list[dict[str, Any]], processor: Any
+) -> dict[str, Any]:
+    """Select processor kwargs for Gemma 4 native vision preprocessing.
+
+    By default we keep the processor's built-in token budget so Gemma 4
+    matches the reference Hugging Face and Ollama preprocessing path. A
+    higher budget remains available through explicit environment overrides
+    for debugging or local experiments.
+    """
+    has_image = False
+    for message in chat_template_messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and str(part.get("type", "")) == "image":
+                    has_image = True
+                    break
+        if has_image:
+            break
+
+    configured_budget: int | None = None
+    for env_var_name in (
+        "EXO_GEMMA4_MAX_SOFT_TOKENS",
+        "EXO_GEMMA4_IMAGE_ONLY_MAX_SOFT_TOKENS",
+    ):
+        override_value = os.environ.get(env_var_name)
+        if override_value is None:
+            continue
+        with contextlib.suppress(ValueError):
+            parsed_override = int(override_value)
+            if parsed_override > 0:
+                configured_budget = parsed_override
+                break
+
+    current_budget = getattr(processor, "max_soft_tokens", None)
+    if (
+        configured_budget is None
+        or not has_image
+        or not isinstance(current_budget, int)
+        or current_budget >= configured_budget
+    ):
+        return {}
+
+    logger.info(
+        "Gemma 4 prompt with images detected; raising max_soft_tokens "
+        f"from {current_budget} to {configured_budget} for better visual detail"
+    )
+    return {"max_soft_tokens": configured_budget}
 
 
 _video_processor_patched = False
@@ -73,8 +161,68 @@ def _patch_video_processor() -> None:
 def decode_base64_image(b64_data: str) -> Image.Image:
     """Decode a raw base64 string into an RGB PIL Image."""
     raw = base64.b64decode(b64_data)
-    img = Image.open(io.BytesIO(raw))
-    return img.convert("RGB")
+    with Image.open(io.BytesIO(raw)) as img:
+        return img.convert("RGB")
+
+
+@dataclass(frozen=True)
+class _DecodedImageDebug:
+    b64_sha256: str
+    raw_sha256: str
+    rgb_sha256: str
+    raw_bytes: int
+    width: int
+    height: int
+    original_mode: str
+
+
+def _decode_base64_image_with_debug(
+    b64_data: str,
+) -> tuple[Image.Image, _DecodedImageDebug]:
+    raw = base64.b64decode(b64_data)
+    with Image.open(io.BytesIO(raw)) as img:
+        original_mode = img.mode
+        rgb_img = img.convert("RGB")
+    debug = _DecodedImageDebug(
+        b64_sha256=hashlib.sha256(b64_data.encode("ascii")).hexdigest(),
+        raw_sha256=hashlib.sha256(raw).hexdigest(),
+        rgb_sha256=hashlib.sha256(rgb_img.tobytes()).hexdigest(),
+        raw_bytes=len(raw),
+        width=rgb_img.width,
+        height=rgb_img.height,
+        original_mode=original_mode,
+    )
+    return rgb_img, debug
+
+
+def _vision_transport_debug_enabled() -> bool:
+    """Return whether expensive per-image debug hashing/logging is enabled."""
+    return EXO_IMAGE_TRANSPORT_DEBUG or bool(os.environ.get("EXO_VISION_DEBUG_SAVE_DIR"))
+
+
+def _maybe_dump_debug_image(
+    image: Image.Image,
+    debug: _DecodedImageDebug,
+    image_index: int,
+) -> None:
+    """Persist the decoded image when explicit vision debugging is enabled.
+
+    This makes it easy to distinguish "the model saw the wrong image" from
+    "the model misread the right image" without reintroducing giant base64
+    blobs into the logs.
+    """
+    configured_dir = os.environ.get("EXO_VISION_DEBUG_SAVE_DIR")
+    if not configured_dir:
+        return
+
+    output_dir = Path(configured_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{debug.raw_sha256[:16]}-image{image_index}.png"
+    image.save(output_path, format="PNG")
+    logger.info(
+        f"Saved decoded vision image {image_index} to {output_path} "
+        f"(raw_sha256={debug.raw_sha256[:12]}... rgb_sha256={debug.rgb_sha256[:12]}...)"
+    )
 
 
 def _format_vlm_messages(
@@ -119,6 +267,7 @@ def build_vision_prompt(
     chat_template_messages: list[dict[str, Any]],
     n_tokens_per_image: list[int],
     image_token: str,
+    model_type: str | None = None,
     boi_token_id: int | None = None,
     eoi_token_id: int | None = None,
 ) -> str:
@@ -131,11 +280,18 @@ def build_vision_prompt(
     logger.info(
         f"Vision prompt messages: {[{k: (v[:50] if isinstance(v, str) else v) for k, v in m.items()} for m in chat_template_messages]}"  # type: ignore
     )
-    prompt: str = tokenizer.apply_chat_template(
-        chat_template_messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    uses_gemma4_reference_prompt = model_type == "gemma4"
+    if uses_gemma4_reference_prompt:
+        prompt = render_gemma4_prompt(
+            chat_template_messages,
+            add_generation_prompt=True,
+        )
+    else:
+        prompt = tokenizer.apply_chat_template(
+            chat_template_messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
     # Decode BOI/EOI token IDs to their string form so we can insert them
     # into the prompt text before tokenization.
@@ -397,22 +553,29 @@ class VisionEncoder:
                 proc_mod = self._import_mlx_vlm(  # type: ignore
                     f"processing_{self._config.model_type}"
                 )
+                self._processor = _load_mlx_vlm_image_processor_from_pretrained(
+                    proc_mod, repo
+                )
                 proc_cls = None
                 for attr in dir(proc_mod):  # type: ignore
                     obj = getattr(proc_mod, attr)  # type: ignore
                     if isinstance(obj, type) and "ImageProcessor" in attr:
                         proc_cls = obj
                         break
-                if proc_cls is None:
+                if self._processor is None and proc_cls is None:
                     raise ValueError(
                         f"No ImageProcessor found in mlx_vlm.models."
                         f"{self._config.model_type}.processing_{self._config.model_type}"
                     ) from None
-                self._processor = proc_cls()  # type: ignore
-                logger.info(f"Using mlx_vlm {proc_cls.__name__} as image processor")
+                if self._processor is None:
+                    self._processor = proc_cls()  # type: ignore[operator]
+                    logger.info(f"Using mlx_vlm {proc_cls.__name__} as image processor")
         if processor_repo:
             self._merge_kernel_size = vision_cfg.get("merge_kernel_size", [2, 2])  # type: ignore
             self._needs_nhwc = True
+        max_soft_tokens = getattr(self._processor, "max_soft_tokens", None)
+        if isinstance(max_soft_tokens, int):
+            logger.info(f"Image processor max_soft_tokens={max_soft_tokens}")
         logger.info(f"HF image processor loaded from {repo}")
         self._processor_loaded = True
 
@@ -526,11 +689,14 @@ class VisionEncoder:
         )
 
     def preprocess_images(
-        self, pil_images: list[Image.Image]
+        self,
+        pil_images: list[Image.Image],
+        *,
+        processor_kwargs: dict[str, Any] | None = None,
     ) -> tuple[mx.array | list[mx.array], mx.array | None, list[int]]:
         """Public interface to image preprocessing (pixel_values + token counts)."""
         self.ensure_processor_loaded()
-        return self._preprocess_images(pil_images)
+        return self._preprocess_images(pil_images, processor_kwargs=processor_kwargs)
 
     def encode_images(self, images: list[str]) -> tuple[mx.array, list[int]]:
         """Encode base64 images into feature tensors and per-image token counts."""
@@ -555,15 +721,20 @@ class VisionEncoder:
         return image_features, n_tokens_per_image
 
     def _preprocess_images(
-        self, pil_images: list[Image.Image]
+        self,
+        pil_images: list[Image.Image],
+        *,
+        processor_kwargs: dict[str, Any] | None = None,
     ) -> tuple[mx.array | list[mx.array], mx.array | None, list[int]]:
         """Run the image processor and return pixel values, optional grid, and token counts."""
         assert self._processor is not None
+        processor_kwargs = processor_kwargs or {}
 
         if self._config.processor_repo:
             processed = self._processor.preprocess(
                 [{"type": "image", "image": img} for img in pil_images],
                 return_tensors="np",
+                **processor_kwargs,
             )
             pixel_values = mx.array(processed["pixel_values"])  # type: ignore
             grid_thw = mx.array(processed["grid_thws"])  # type: ignore
@@ -575,7 +746,9 @@ class VisionEncoder:
             ]
             return pixel_values, grid_thw, n_tokens_per_image
 
-        raw: Any = self._processor(images=pil_images, return_tensors="np")
+        raw: Any = self._processor(
+            images=pil_images, return_tensors="np", **processor_kwargs
+        )
 
         # Gemma 4's processor returns (data_dict, num_soft_tokens_per_image).
         if isinstance(raw, tuple):
@@ -800,6 +973,18 @@ def _find_media_regions(
         else:
             logger.warning(f"Media region {i} has no corresponding image")
 
+    region_summaries = [
+        {
+            "index": i,
+            "start": region.start_pos,
+            "end": region.end_pos,
+            "length": region.end_pos - region.start_pos,
+            "content_hash": region.content_hash[:12],
+        }
+        for i, region in enumerate(regions)
+    ]
+    logger.info(f"Vision media regions: {region_summaries}")
+
     return regions
 
 
@@ -869,6 +1054,7 @@ class VisionProcessor:
             formatted_messages,
             n_tokens_per_image,
             image_token,
+            model_type=self.vision_config.model_type,
             boi_token_id=self.vision_config.boi_token_id,
             eoi_token_id=self.vision_config.eoi_token_id,
         )
@@ -924,13 +1110,36 @@ class VisionProcessor:
         path as mlx-vlm: vision tower -> projector -> masked_scatter."""
         logger.info("Using native vision pipeline (model has built-in vision tower)")
         self._encoder.ensure_processor_loaded()
+        processor = self._encoder._processor
+        assert processor is not None
 
-        pil_images = [decode_base64_image(b64) for b64 in images]
-        for idx, img in enumerate(pil_images):
-            logger.info(f"Image {idx}: {img.width}x{img.height} mode={img.mode}")
+        debug_enabled = _vision_transport_debug_enabled()
+        if debug_enabled:
+            decoded_images = [_decode_base64_image_with_debug(b64) for b64 in images]
+            pil_images = [image for image, _debug in decoded_images]
+            for idx, (img, debug) in enumerate(decoded_images):
+                logger.info(
+                    f"Image {idx}: {img.width}x{img.height} mode={img.mode} "
+                    f"original_mode={debug.original_mode} raw_bytes={debug.raw_bytes} "
+                    f"b64_sha256={debug.b64_sha256[:12]}... "
+                    f"raw_sha256={debug.raw_sha256[:12]}... "
+                    f"rgb_sha256={debug.rgb_sha256[:12]}..."
+                )
+                _maybe_dump_debug_image(img, debug, idx)
+        else:
+            pil_images = [decode_base64_image(b64) for b64 in images]
+            for idx, img in enumerate(pil_images):
+                logger.debug(f"Image {idx}: {img.width}x{img.height} mode={img.mode}")
 
+        processor_kwargs = (
+            _gemma4_native_processor_kwargs(chat_template_messages, processor)
+            if self.vision_config.model_type == "gemma4"
+            else {}
+        )
+        logger.info(f"Native vision processor kwargs: {processor_kwargs}")
         pixel_values, _grid_thw, n_tokens_per_image = self._encoder.preprocess_images(
-            pil_images
+            pil_images,
+            processor_kwargs=processor_kwargs,
         )
         logger.info(
             f"Native vision: preprocessed {len(images)} image(s), "
@@ -949,6 +1158,7 @@ class VisionProcessor:
             formatted_messages,
             n_tokens_per_image,
             image_token,
+            model_type=self.vision_config.model_type,
             boi_token_id=self.vision_config.boi_token_id,
             eoi_token_id=self.vision_config.eoi_token_id,
         )

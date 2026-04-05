@@ -218,6 +218,10 @@ class KVPrefixCache:
                 best_index, best_length = i, length
 
         if best_index is None:
+            logger.info(
+                f"KV cache miss: cache_entries={len(self.prompts)} "
+                f"query_tokens={max_length} query_media_regions={len(query_regions)}"
+            )
             return make_kv_cache(model), prompt_tokens, None
 
         # For exact match: trim to max_length-1 so remaining has the last token
@@ -244,6 +248,14 @@ class KVPrefixCache:
         self._access_counter += 1
         self._last_used[best_index] = self._access_counter
         remaining = prompt_tokens[restore_pos:]
+        logger.info(
+            f"KV cache lookup: matched_index={best_index} "
+            f"matched_tokens={best_length}/{max_length} "
+            f"restore_pos={restore_pos} remaining_tokens={len(remaining)} "
+            f"exact_match={is_exact} "
+            f"query_media_regions={len(query_regions)} "
+            f"cached_media_regions={len(self._media_regions[best_index])}"
+        )
 
         return prompt_cache, remaining, best_index
 
@@ -253,12 +265,28 @@ class KVPrefixCache:
         cached_regions: list["MediaRegion"],
         query_regions: list["MediaRegion"],
     ) -> int:
-        if not cached_regions:
-            return match_length
-
+        cached_by_start: dict[int, "MediaRegion"] = {
+            r.start_pos: r for r in cached_regions
+        }
         query_by_start: dict[int, "MediaRegion"] = {
             r.start_pos: r for r in query_regions
         }
+
+        for query_r in query_regions:
+            if query_r.start_pos >= match_length:
+                break
+            cached_r = cached_by_start.get(query_r.start_pos)
+            if cached_r is None:
+                # The query expects an image span here, but the cached entry has
+                # no media metadata for this region. Reusing cache past this point
+                # would risk carrying over stale hidden states from a text-only or
+                # pre-media-aware entry into a new multimodal request.
+                logger.info(
+                    f"Query media region at pos {query_r.start_pos} absent in cache — "
+                    f"truncating match from {match_length} to {query_r.start_pos}"
+                )
+                match_length = query_r.start_pos
+                break
 
         for cached_r in cached_regions:
             if cached_r.start_pos >= match_length:

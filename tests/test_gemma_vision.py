@@ -5,12 +5,17 @@ model_type auto-detection priority, and VisionCardConfig BOI/EOI fields."""
 
 import base64
 import io
+from types import SimpleNamespace
 
 import mlx.core as mx
 import mlx.nn as nn
 from PIL import Image
 
 from exo.shared.models.model_cards import VisionCardConfig
+from exo.shared.types.common import ModelId
+from exo.shared.types.text_generation import InputMessage, TextGenerationTaskParams
+from exo.worker.engines.mlx.gemma4_prompt import render_gemma4_prompt
+from exo.worker.engines.mlx.utils_mlx import apply_chat_template
 from exo.worker.engines.mlx.vision import _find_media_regions, _format_vlm_messages
 
 
@@ -142,6 +147,188 @@ class TestModelTypePriority:
         assert result.vision.model_type == "qwen3_vl"
 
 
+class TestGemma4ReferencePromptRenderer:
+    """Gemma 4 prompts should match the dedicated reference structure."""
+
+    def test_multimodal_prompt_matches_reference_shape(self):
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "what do you see?"},
+                ],
+            }
+        ]
+
+        prompt = render_gemma4_prompt(messages, add_generation_prompt=True)
+
+        assert (
+            prompt
+            == "<bos><|turn>user\n\n\n<|image|>\n\nwhat do you see?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+        )
+
+    def test_thinking_requires_explicit_enable(self):
+        messages = [{"role": "user", "content": "Hi"}]
+
+        prompt = render_gemma4_prompt(
+            messages,
+            add_generation_prompt=True,
+            enable_thinking=True,
+        )
+
+        assert (
+            prompt
+            == "<bos><|turn>system\n<|think|><turn|>\n<|turn>user\nHi<turn|>\n<|turn>model\n"
+        )
+
+    def test_apply_chat_template_uses_reference_renderer_for_plain_gemma4(self):
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 should not use generic chat templating here")
+
+        task = TextGenerationTaskParams(
+            model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+            input=[InputMessage(role="user", content="what do you see?")],
+            chat_template_messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "what do you see?"},
+                    ],
+                }
+            ],
+            images=[_fake_b64_image()],
+        )
+
+        prompt = apply_chat_template(_Tokenizer(), task)  # type: ignore[arg-type]
+
+        assert prompt.endswith("<|turn>model\n<|channel>thought\n<channel|>")
+
+    def test_apply_chat_template_preserves_gemma4_assistant_prefill_suffix(self):
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 should not use generic chat templating here")
+
+        task = TextGenerationTaskParams(
+            model=ModelId("mlx-community/gemma-4-26b-a4b-it-4bit"),
+            input=[InputMessage(role="user", content="hello")],
+            chat_template_messages=[
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "Draft answer:"},
+            ],
+        )
+
+        prompt = apply_chat_template(_Tokenizer(), task)  # type: ignore[arg-type]
+
+        assert prompt.endswith("<|channel>thought\n<channel|>Draft answer:")
+
+    def test_build_vision_prompt_uses_reference_renderer_for_gemma4(self):
+        from exo.worker.engines.mlx.vision import build_vision_prompt
+
+        class _Tokenizer:
+            def apply_chat_template(self, *args, **kwargs):
+                raise AssertionError("Gemma 4 vision should not use generic chat templating here")
+
+            def decode(self, token_ids):
+                mapping = {10: "<|image>", 11: "<image|>"}
+                return "".join(mapping[token_id] for token_id in token_ids)
+
+        prompt = build_vision_prompt(
+            tokenizer=_Tokenizer(),  # type: ignore[arg-type]
+            chat_template_messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "what do you see?"},
+                    ],
+                }
+            ],
+            n_tokens_per_image=[3],
+            image_token="<|image|>",
+            model_type="gemma4",
+            boi_token_id=10,
+            eoi_token_id=11,
+        )
+
+        assert (
+            prompt
+            == "<bos><|turn>user\n\n\n<|image><|image|><|image|><|image|><image|>\n\nwhat do you see?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+        )
+
+    def test_process_native_forwards_gemma4_model_type_to_prompt_builder(
+        self, monkeypatch, tmp_path
+    ):
+        from exo.shared.models.model_cards import VisionCardConfig
+        from exo.worker.engines.mlx.vision import VisionProcessor
+
+        (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision.build_model_path",
+            lambda _model_id: tmp_path,
+        )
+
+        config = VisionCardConfig(
+            image_token_id=258880,
+            model_type="gemma4",
+            weights_repo="mlx-community/gemma-4-26b-a4b-it-4bit",
+            boi_token_id=255999,
+            eoi_token_id=258882,
+        )
+        processor = VisionProcessor(
+            config, ModelId("mlx-community/gemma-4-26b-a4b-it-4bit")
+        )
+        processor._encoder.ensure_processor_loaded = lambda: None  # type: ignore[method-assign]
+        processor._encoder._processor = SimpleNamespace(max_soft_tokens=280)  # type: ignore[attr-defined]
+        processor._encoder.preprocess_images = (  # type: ignore[method-assign]
+            lambda images, processor_kwargs=None: (mx.zeros((1, 3, 16, 16)), None, [1])
+        )
+
+        captured: dict[str, object] = {}
+
+        def _fake_build_vision_prompt(
+            tokenizer,
+            chat_template_messages,
+            n_tokens_per_image,
+            image_token,
+            model_type=None,
+            boi_token_id=None,
+            eoi_token_id=None,
+        ) -> str:
+            captured["model_type"] = model_type
+            return "<|image|>"
+
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision.build_vision_prompt",
+            _fake_build_vision_prompt,
+        )
+        monkeypatch.setattr(
+            "exo.worker.engines.mlx.vision._find_media_regions",
+            lambda *args, **kwargs: [],
+        )
+
+        class _Tokenizer:
+            has_thinking = False
+
+            def decode(self, token_ids):
+                return "<|image|>"
+
+            def encode(self, text, add_special_tokens=False):
+                return [258880]
+
+        result = processor._process_native(
+            images=[_fake_b64_image()],
+            chat_template_messages=[{"role": "user", "content": [{"type": "image"}]}],
+            tokenizer=_Tokenizer(),  # type: ignore[arg-type]
+            model=SimpleNamespace(),  # type: ignore[arg-type]
+        )
+
+        assert captured["model_type"] == "gemma4"
+        assert result.prompt_tokens.shape == (1,)
+
+
 class TestLoadProjectorWeights:
     """_load_projector_weights should handle both quantized and unquantized."""
 
@@ -219,6 +406,221 @@ class TestHasNativeVision:
         assert has_native_vision(_Partial()) is False
 
 
+class TestMlxVlmProcessorFallback:
+    """Gemma 4 fallback processor loading should preserve MLX-VLM config."""
+
+    def test_prefers_processor_from_pretrained(self):
+        from exo.worker.engines.mlx.vision import (
+            _load_mlx_vlm_image_processor_from_pretrained,
+        )
+
+        configured_image_processor = object()
+
+        class _FakeProcessor:
+            @classmethod
+            def from_pretrained(cls, repo: str) -> SimpleNamespace:
+                assert repo == "/tmp/repo"
+                return SimpleNamespace(image_processor=configured_image_processor)
+
+        proc_mod = SimpleNamespace(
+            FakeProcessor=_FakeProcessor,
+        )
+
+        result = _load_mlx_vlm_image_processor_from_pretrained(proc_mod, "/tmp/repo")
+
+        assert result is configured_image_processor
+
+
+class TestGemma4NativeProcessorBudget:
+    """Gemma 4 processor budget should stay at reference unless overridden."""
+
+    def test_image_only_prompt_keeps_reference_budget_by_default(self):
+        from exo.worker.engines.mlx.vision import _gemma4_native_processor_kwargs
+
+        messages = [{"role": "user", "content": [{"type": "image"}]}]
+        processor = SimpleNamespace(max_soft_tokens=280)
+
+        result = _gemma4_native_processor_kwargs(messages, processor)
+
+        assert result == {}
+
+    def test_image_only_prompt_respects_env_override(self, monkeypatch):
+        from exo.worker.engines.mlx.vision import _gemma4_native_processor_kwargs
+
+        monkeypatch.setenv("EXO_GEMMA4_IMAGE_ONLY_MAX_SOFT_TOKENS", "320")
+        messages = [{"role": "user", "content": [{"type": "image"}]}]
+        processor = SimpleNamespace(max_soft_tokens=280)
+
+        result = _gemma4_native_processor_kwargs(messages, processor)
+
+        assert result == {"max_soft_tokens": 320}
+
+    def test_text_and_image_prompt_keeps_reference_budget_by_default(self):
+        from exo.worker.engines.mlx.vision import _gemma4_native_processor_kwargs
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "Describe this image"},
+                ],
+            }
+        ]
+        processor = SimpleNamespace(max_soft_tokens=280)
+
+        result = _gemma4_native_processor_kwargs(messages, processor)
+
+        assert result == {}
+
+    def test_text_only_prompt_keeps_existing_budget(self):
+        from exo.worker.engines.mlx.vision import _gemma4_native_processor_kwargs
+
+        messages = [{"role": "user", "content": "Describe this text prompt"}]
+        processor = SimpleNamespace(max_soft_tokens=280)
+
+        result = _gemma4_native_processor_kwargs(messages, processor)
+
+        assert result == {}
+
+
+class TestGemma4DynamicVisionPooling:
+    """Gemma 4 native vision should pool using the actual processed image size."""
+
+    def test_patch_positions_expand_past_default_max_patches(self):
+        from exo.worker.engines.mlx.utils_mlx import (
+            _gemma4_patch_positions_and_padding,
+        )
+
+        pixel_values = mx.zeros((1, 3, 576, 1152))
+
+        patch_positions, padding_positions = _gemma4_patch_positions_and_padding(
+            pixel_values,
+            patch_size=16,
+            max_patches=280 * 9,
+        )
+
+        assert patch_positions.shape == (1, 2592, 2)
+        assert padding_positions.shape == (1, 2592)
+        assert bool(mx.any(padding_positions).item()) is False
+
+    def test_output_length_matches_processed_wide_image(self):
+        from exo.worker.engines.mlx.utils_mlx import (
+            _gemma4_output_length_for_pixel_values,
+        )
+
+        pixel_values = mx.zeros((1, 3, 576, 1104))
+
+        result = _gemma4_output_length_for_pixel_values(
+            pixel_values,
+            patch_size=16,
+            pooling_kernel_size=3,
+        )
+
+        assert result == 276
+
+    def test_dynamic_wrapper_passes_output_length_to_pooler(self):
+        from exo.worker.engines.mlx.utils_mlx import _Gemma4DynamicVisionTower
+
+        class _FakePatchEmbedder(nn.Module):
+            def __call__(
+                self,
+                pixel_values: mx.array,
+                patch_positions: mx.array,
+                padding_positions: mx.array,
+            ) -> mx.array:
+                batch_size = pixel_values.shape[0]
+                seq_len = patch_positions.shape[1]
+                _ = padding_positions
+                return mx.zeros((batch_size, seq_len, 8))
+
+        class _FakeEncoder(nn.Module):
+            def __call__(
+                self,
+                hidden_states: mx.array,
+                patch_positions: mx.array,
+                attn_mask: mx.array,
+            ) -> mx.array:
+                assert patch_positions.shape[1] == hidden_states.shape[1]
+                assert attn_mask.shape[-1] == hidden_states.shape[1]
+                return hidden_states
+
+        class _FakePooler(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.output_length: int | None = None
+
+            def __call__(
+                self,
+                hidden_states: mx.array,
+                patch_positions: mx.array,
+                padding_positions: mx.array,
+                output_length: int | None = None,
+            ) -> tuple[mx.array, mx.array]:
+                _ = hidden_states
+                _ = patch_positions
+                _ = padding_positions
+                assert output_length is not None
+                self.output_length = output_length
+                pooled = mx.zeros((1, output_length, 8))
+                mask = mx.ones((1, output_length), dtype=mx.bool_)
+                return pooled, mask
+
+        class _FakeInner(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.patch_size = 16
+                self.pooling_kernel_size = 3
+                self.max_patches = 280 * 9
+                self.patch_embedder = _FakePatchEmbedder()
+                self.encoder = _FakeEncoder()
+                self.pooler = _FakePooler()
+                self.config = SimpleNamespace(standardize=False)
+
+            def _patch_positions(
+                self, pixel_values: mx.array
+            ) -> tuple[mx.array, mx.array]:
+                import numpy as _np
+
+                batch_size, _, height, width = pixel_values.shape
+                patch_height = height // self.patch_size
+                patch_width = width // self.patch_size
+                num_real = patch_height * patch_width
+                num_padding = self.max_patches - num_real
+
+                positions = []
+                for y in range(patch_height):
+                    for x in range(patch_width):
+                        positions.append([x, y])
+
+                real_positions = _np.array(positions, dtype=_np.int32)
+                real_positions = _np.tile(real_positions[None], (batch_size, 1, 1))
+                if num_padding > 0:
+                    pad_positions = _np.full(
+                        (batch_size, num_padding, 2), -1, dtype=_np.int32
+                    )
+                    patch_positions = _np.concatenate(
+                        [real_positions, pad_positions], axis=1
+                    )
+                else:
+                    patch_positions = real_positions
+
+                padding_positions = _np.zeros(
+                    (batch_size, self.max_patches), dtype=bool
+                )
+                if num_padding > 0:
+                    padding_positions[:, num_real:] = True
+
+                return mx.array(patch_positions), mx.array(padding_positions)
+
+        inner = _FakeInner()
+        wrapped = _Gemma4DynamicVisionTower(inner)
+
+        _ = wrapped(mx.zeros((1, 3, 576, 1104)))
+
+        assert inner.pooler.output_length == 276
+
+
 class TestFormatVlmMessages:
     """Gemma prompts should preserve multimodal ordering instead of flattening."""
 
@@ -248,4 +650,3 @@ class TestFormatVlmMessages:
                 ],
             }
         ]
-
