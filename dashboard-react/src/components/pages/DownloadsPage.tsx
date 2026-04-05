@@ -161,29 +161,43 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
   const [storeDownloads, setStoreDownloads] = useState<StoreDownloadProgress[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
   const [placementModelId, setPlacementModelId] = useState<string | null>(null);
-  const [apiModelTags, setApiModelTags] = useState<Record<string, string[]>>({});
+  const [apiModelCards, setApiModelCards] = useState<Record<string, ModelCardInfo>>({});
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const optimizePollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-  // Fetch model tags from /models API
+  // Fetch authoritative model card info from /models API
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/models');
         if (!res.ok) return;
         const data = await res.json();
-        const tags: Record<string, string[]> = {};
+        const cards: Record<string, ModelCardInfo> = {};
         for (const m of data.data ?? []) {
-          if (m.id && m.tags && m.tags.length > 0) tags[m.id] = m.tags;
+          if (!m.id) continue;
+          cards[m.id] = {
+            family: m.family ?? undefined,
+            quantization: m.quantization ?? undefined,
+            baseModel: m.base_model ?? undefined,
+            supportsTensor: m.supports_tensor ?? undefined,
+            capabilities: m.capabilities ?? undefined,
+            tags: m.tags ?? [],
+          };
         }
-        setApiModelTags(tags);
+        setApiModelCards(cards);
       } catch { /* ignore */ }
     })();
   }, []);
 
-  // Extract model card info from download data for the store table tooltips
+  // Model card metadata: /models API is the source of truth (reflects
+  // current TOML cards).  Download-state card data is only used as a
+  // fallback for models not yet known to the API (e.g. mid-download
+  // custom models).
   const modelCards = useMemo<Record<string, ModelCardInfo>>(() => {
-    const cards: Record<string, ModelCardInfo> = {};
+    // Start with authoritative API data
+    const cards: Record<string, ModelCardInfo> = { ...apiModelCards };
+
+    // Fill in any models only visible in download state (custom/in-progress)
     for (const entries of Object.values(downloads)) {
       const list = Array.isArray(entries) ? entries : Object.values(entries);
       for (const entry of list) {
@@ -198,34 +212,27 @@ export function ModelStorePage({ topology, downloads, nodeDisk, instances, runne
           const raw = (inner.modelCard ?? inner.model_card) as Record<string, unknown> | undefined;
           if (!raw) continue;
           const mid = (raw.modelId ?? raw.model_id) as string | undefined;
-          if (!mid || cards[mid]) continue;
-          const tags: string[] = [];
-          if (mid.toLowerCase().includes('optiq') || (raw.quantization as string ?? '').toLowerCase().includes('optiq')) tags.push('optiq');
-          if ((raw.capabilities as string[] ?? []).includes('thinking')) tags.push('thinking');
-          if ((raw.capabilities as string[] ?? []).includes('vision')) tags.push('vision');
-          if ((raw.supportsTensor ?? raw.supports_tensor) as boolean) tags.push('tensor');
-          if ((raw.capabilities as string[] ?? []).includes('embedding')) tags.push('embedding');
+          if (!mid || cards[mid]) continue; // API data takes precedence
+          // Derive tags from download metadata (mirrors server-side _model_tags logic)
+          const fallbackTags: string[] = [];
+          if (mid.toLowerCase().includes('optiq') || (raw.quantization as string ?? '').toLowerCase().includes('optiq')) fallbackTags.push('optiq');
+          if ((raw.capabilities as string[] ?? []).includes('thinking')) fallbackTags.push('thinking');
+          if ((raw.capabilities as string[] ?? []).includes('vision')) fallbackTags.push('vision');
+          if ((raw.supportsTensor ?? raw.supports_tensor) as boolean) fallbackTags.push('tensor');
+          if ((raw.capabilities as string[] ?? []).includes('embedding')) fallbackTags.push('embedding');
           cards[mid] = {
             family: raw.family as string | undefined,
             quantization: raw.quantization as string | undefined,
             baseModel: (raw.baseModel ?? raw.base_model) as string | undefined,
             supportsTensor: (raw.supportsTensor ?? raw.supports_tensor) as boolean | undefined,
             capabilities: raw.capabilities as string[] | undefined,
-            tags,
+            tags: fallbackTags,
           };
         }
       }
     }
-    // Merge tags from /models API for models not in download state
-    for (const [mid, tags] of Object.entries(apiModelTags)) {
-      if (!cards[mid]) {
-        cards[mid] = { tags };
-      } else if (!cards[mid].tags || cards[mid].tags!.length === 0) {
-        cards[mid].tags = tags;
-      }
-    }
     return cards;
-  }, [downloads, apiModelTags]);
+  }, [downloads, apiModelCards]);
 
   const fetchDownloads = useCallback(async () => {
     try {
