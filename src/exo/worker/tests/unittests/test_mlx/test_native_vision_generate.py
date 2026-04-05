@@ -297,8 +297,6 @@ def test_native_vision_reference_path_keeps_prereleases_on_safe_path(
     )
 
     assert _should_use_native_vision_reference_path() is True
-
-
 def test_slice_native_pixel_values_for_uncached_suffix_drops_cached_images() -> None:
     """Prefix hits should remove already-cached native images from pixel_values."""
 
